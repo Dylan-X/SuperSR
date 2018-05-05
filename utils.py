@@ -30,6 +30,12 @@ def psnr_np(y_true, y_pred):
     return -10. * np.log10(np.mean(np.square(y_pred - y_true)))
 
 
+
+"""
+copied from : 
+https://github.com/twairball/keras-subpixel-conv
+"""
+
 def SubpixelConv2D(input_shape, scale=4):
     """
     Keras layer to do subpixel convolution.
