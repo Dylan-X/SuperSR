@@ -61,7 +61,7 @@ class BaseSRModel(object):
         if self.model == None: self.create_model()
 
         adam = optimizers.Adam(lr=learning_rate)
-        model.compile(optimizer=adam, loss=loss, metrics=[psnr_k])
+        self.model.compile(optimizer=adam, loss=loss, metrics=[psnr_k])
 
         callback_list = []
         callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_loss',
@@ -154,13 +154,14 @@ class SRCNN(BaseSRModel):
         x = Convolution2D(self.n1, (self.f1, self.f1), activation='relu', padding='same', name='level1')(init)
         x = Convolution2D(self.n2, (self.f2, self.f2), activation='relu', padding='same', name='level2')(x)
 
-        out = Convolution2D(channels, (self.f3, self.f3), padding='same', name='output')(x)
+        out = Convolution2D(self.channel, (self.f3, self.f3), padding='same', name='output')(x)
 
         model = Model(init, out)
 
         if load_weights: 
             model.load_weights(self.weight_path)
             print("loaded model%s"%(self.model_name))
+
         self.model = model
         return model
     
@@ -175,3 +176,4 @@ class EDSR(BaseSRModel):
     def __init__(self, ):
         pass
 
+# Here is some changes
