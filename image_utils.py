@@ -414,7 +414,7 @@ class Dataset(object):
                     if count%10 == 0:
                         sys.stdout.write('\r %d images have been written in h5 file, %d remained.'%(count, self.num_image-count))
                 if count >= self.num_image:
-                    print('Finished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mod'%\
+                    print('Finished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode'%\
                                 (self.num_image, self.image_dir, self.save_path, num_dataInH5File))
                     break
 
@@ -446,6 +446,8 @@ class Dataset(object):
 
             return None
         elif self.save_mode == 'h5':
+            hf = h5py.File(self.save_path, 'a')
+            hf.close()
             assert os.path.isfile(self.save_path), 'Save path should be a h5 file!'
 
             return self._save_H5(verbose=verbose)
