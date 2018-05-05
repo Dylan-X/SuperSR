@@ -8,9 +8,9 @@ from keras.utils.io_utils import HDF5Matrix
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 from keras import backend as K
-from advanced import  SubPixelUpscaling,  TensorBoardBatch
+from advanced import  TensorBoardBatch
 from image_utils import Dataset, downsample, merge_to_whole
-from utils import psnr_k, psnr_np
+from utils import psnr_k, psnr_np, SubpixelConv2D
 import numpy as np
 import os
 import warnings
@@ -19,17 +19,16 @@ import h5py
 import tensorflow as tf
 
 class BaseSRModel(object):
-    def __init__(self, model_name, input_size, channel):
+    def __init__(self, model_name, input_size):
         """
         Input:
             model_name, str, name of this model
-            input_size, tuple, size of input. 
-            channel, int, num of channel of input. 
+            input_size, tuple, size of input. e.g. (48, 48, 3)
         """
         self.model_name = model_name
         self.weight_path=None
         self.input_size=input_size
-        self.channel=channel
+        self.channel=self.input_size[-1]
         self.model=self.create_model(load_weights=False)
 
     def create_model(self, load_weights=False) -> Model:
@@ -128,17 +127,15 @@ class BaseSRModel(object):
         print('average psnr of test images(whole) in %s is %f. \n'%(test_path, ave_psnr))
         return ave_psnr
 
-
 class SRCNN(BaseSRModel):
     """
     pass
     """
-    def __init__(self, model_type, input_size, channel):
+    def __init__(self, model_type, input_size):
         """
         Input:
             model_type, str, name of this SRCNN-net. 
-            input_size, tuple, size of input layer. 
-            channel, int, num of channels of input data. 
+            input_size, tuple, size of input layer. e.g.(48, 48, 3)
         """
         self.f1 = 9
         self.f2 = 1
@@ -148,7 +145,7 @@ class SRCNN(BaseSRModel):
         self.n2 = 32
 
         self.weight_path = "weights/SRCNN Weights %s.h5" % (model_type)
-        super(SRCNN, self).__init__("SRCNN"+model_type, input_size, channel)        
+        super(SRCNN, self).__init__("SRCNN"+model_type, input_size)        
     
     def create_model(self, load_weights=False):
 
@@ -167,24 +164,21 @@ class SRCNN(BaseSRModel):
 
         self.model = model
         return model
-    
-
-
         
 class ResNetSR(BaseSRModel):
     """
     Under test. A little different from original paper. 
     """
 
-    def __init__(self, model_type, input_size, channel, scale):
+    def __init__(self, model_type, input_size, scale):
 
-        self.n = 64
-        self.mode = 2
-        self.f = 3  
-        self.scale = scale
+        self.n = 64 # size of feature. also known as number of filters. 
+        self.mode = 2 
+        self.f = 3  # filter size
+        self.scale = scale # by diff scales comes to diff model structure in upsampling layers. 
 
         self.weight_path = "weights/ResNetSR Weights %s.h5" % (model_type)
-        super(ResNetSR, self).__init__("ResNetSR"+model_type, input_size, channel)
+        super(ResNetSR, self).__init__("ResNetSR"+model_type, input_size)
 
     def create_model(self, load_weights=False, nb_residual = 5):
 
@@ -232,18 +226,11 @@ class ResNetSR(BaseSRModel):
 
     def _upscale_block(self, ip, id):
         init = ip
+        scale = self.scale
 
-        channel_dim = 1 if K.image_data_format() == 'channels_first' else -1
-        channels = init._keras_shape[channel_dim]
-
-        #x = Convolution2D(256, (self.f, self.f), activation="relu", padding='same', name='sr_res_upconv1_%d' % id)(init)
-        #x = SubPixelUpscaling(r=2, channels=self.n, name='sr_res_upscale1_%d' % id)(x)
-        x = UpSampling2D()(init)
-        x = Convolution2D(self.n, (self.f, self.f), activation="relu", padding='same', name='sr_res_filter1_%d' % id)(x)
-
-        # x = Convolution2DTranspose(channels, (4, 4), strides=(2, 2), padding='same', activation='relu',
-        #                            name='upsampling_deconv_%d' % id)(init)
-
+        ps_features = self.channel*(scale**2)
+        x = Convolution2D(ps_features, (self.f, self.f), activation='relu', padding='same', name='sr_upsample_conv%d'%(id))(init)
+        x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
         return x
 
     def fit(self, batch_size=128, nb_epochs=100, save_history=True, history_fn="ResNetSR History.txt"):
@@ -251,84 +238,83 @@ class ResNetSR(BaseSRModel):
 
 class EDSR(BaseSRModel):
 
-	def __init__(self, model_type, input_size, channel, scale):
+    def __init__(self, model_type, input_size, scale):
 
-		self.n = 64 # size of feature. also known as number of filters. 
-		self.f = 3 # shape of filter. 
-		self.scale_res = 1 # used in each residual net
-		self.scale = scale # by diff scales comes to diff model structure in upsampling layers. 
-		self.weight_path = "weights/EDSR Weights %s.h5" % (model_type)
-		super(EDSR, self).__init__("EDSR"+model_type, input_size, channel)
+    	self.n = 256 # size of feature. also known as number of filters. 
+    	self.f = 3 # shape of filter. kernel_size
+    	self.scale_res = 0.1 # used in each residual net
+    	self.scale = scale # by diff scales comes to diff model structure in upsampling layers. 
+    	self.weight_path = "weights/EDSR Weights %s.h5" % (model_type)
+    	super(EDSR, self).__init__("EDSR"+model_type, input_size)
 
-	def create_model(self, load_weights = False, nb_residual = 10):
+    def create_model(self, load_weights = False, nb_residual = 10):
 
-		init = super(EDSR, self).create_model()
+        init = super(EDSR, self).create_model()
 
-		x0 = Convolution2D(self.n, (self.f, self.f), activation='relu', padding='same', name='sr_conv1')(init)
+        x0 = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same', name='sr_conv1')(init)
 
-		x = self._residual_block(x0, 1, scale=self.scale_res)
+        x = self._residual_block(x0, 1, scale=self.scale_res)
 
-		nb_residual = nb_residual - 1
-		for i in range(nb_residual):
-			x = self._residual_block(x, i + 2, scale=self.scale_res)
+        nb_residual = nb_residual - 1
+        for i in range(nb_residual):
+            x = self._residual_block(x, i + 2, scale=self.scale_res)
 
-		x = Convolution2D(self.n, (self.f, self.f), activation='relu', padding='same', name='sr_conv2')(x)
-		x = Add()([x, x0])
+        x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same', name='sr_conv2')(x)
+        x = Add()([x, x0])
 
-		x = self._upsample(x)
+        x = self._upsample(x)
 
-		out = Convolution2D(self.channel, (self.f, self.f), activation="relu", padding='same', name='sr_conv_final')(x)
+        out = Convolution2D(self.channel, (self.f, self.f), activation="linear", padding='same', name='sr_conv_final')(x)
 
-		model = Model(init, out)
-		adam = optimizers.Adam(lr=1e-4)
-		model.compile(optimizer=adam, loss='mae', metrics=[psnr_k])
+        model = Model(init, out)
+        adam = optimizers.Adam(lr=1e-4)
+        model.compile(optimizer=adam, loss='mae', metrics=[psnr_k])
 
-		if load_weights: 
-			model.load_weights(self.weight_path, by_name=True)
-			print("loading model", self.weight_path)
+        if load_weights: 
+            model.load_weights(self.weight_path, by_name=True)
+            print("loading model", self.weight_path)
 
-		self.model = model
-		return model
+        self.model = model
+        return model
 
 
-    # def _residual_block(self, ip, id, scale):
+    def _upsample(self, x):
+        scale = self.scale
+        assert scale in [2,3,4,8], 'scale should be 2, 3 ,4 or 8!'
+        x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv1')(x)
+        if scale == 2:
+            ps_features = self.channel*(scale**2)
+            x = Convolution2D(ps_features, (self.f, self.f), activation='relu', padding='same', name='sr_upsample_conv1')(x)
+            x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
+        elif scale == 3:
+            ps_features = self.channel*(scale**2)
+            x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv1')(x)
+            x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
+        elif scale == 4:
+            ps_features = self.channel*(2**2)
+            for i in range(2):
+                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+1))(x)
+                x = SubpixelConv2D(input_shape=self.input_size, scale=2)(x)
+        elif scale == 8:
+            ps_features = self.channel*(4**2)
+            for i in range(2):
+                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+1))(x)
+                x = SubpixelConv2D(input_shape=self.input_size, scale=4)(x)
+        return x
 
-    #     init = ip
+    def _residual_block(self, ip, id, scale):
 
-    #     x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same',
-    #                         name='sr_res_conv_' + str(id) + '_1')(ip)
-    #     x = Activation('relu', name="sr_res_activation_" + str(id) + "_1")(x)
+        init = ip
 
-    #     x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same',
-    #                         name='sr_res_conv_' + str(id) + '_2')(x)
+        x = Convolution2D(self.n, (self.f, self.f), activation='relu', padding='same',
+                            name='sr_res_conv_' + str(id) + '_1')(ip)
+        x = Activation('relu', name="sr_res_activation_" + str(id) + "_1")(x)
 
-    #     Lambda(lambda x: x * self.scale_res)(x)
-    #     m = Add(name="res_merge_" + str(id))([x, init])
+        x = Convolution2D(self.n, (self.f, self.f), activation='relu', padding='same',
+                            name='sr_res_conv_' + str(id) + '_2')(x)
 
-    #     return m
+        Lambda(lambda x: x * self.scale_res)(x)
+        m = Add(name="res_merge_" + str(id))([x, init])
 
-	def _upsample(self, x):
-		scale = self.scale
-		assert scale in [2,3,4], 'scale should be 2, 3 or 4!'
-		x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv1')(x)
-		if scale == 2:
-			ps_features = (scale**2)
-			x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_subpixel_conv1')(x)
-			#x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation='linear', padding='same', name='sr_subpixel_conv1')
-			x = SubPixelUpscaling(r=scale, channels=self.channel)(x)
-		elif scale == 3:
-			ps_features =(scale**2)
-			x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_subpixel_conv1')(x)
-			#x = slim.conv2d_transpose(x,ps_features,9,stride=1,activation='linear', padding='same', name='sr_subpixel_conv1')
-			x = SubPixelUpscaling(r=scale, channels=self.channel)(x)
-		elif scale == 4:
-			ps_features = (2**2)
-			for i in range(2):
-				x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_subpixel_conv%d'%(i+1))(x)
-				#x = slim.conv2d_transpose(x,ps_features,6,stride=1,activation_fn=activation)
-				x = SubPixelUpscaling(r=2, channels=self.channel)(x)
-		return x
-    
-    
+        return m
 
-# Here is some changes

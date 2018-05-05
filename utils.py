@@ -1,11 +1,12 @@
 from keras.models import Model
-from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU
+from keras.layers import Conv2D, Concatenate, Add, Average, Input, Dense, Flatten, BatchNormalization, Activation, LeakyReLU, Lambda
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, UpSampling2D, Convolution2DTranspose
 from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 from keras import backend as K
 import numpy as np
+import tensorflow as tf
 
 # psnr loss definition:
 def psnr_k(y_true, y_pred):
@@ -27,3 +28,33 @@ def psnr_np(y_true, y_pred):
                                                                                    str(y_pred.shape))
 
     return -10. * np.log10(np.mean(np.square(y_pred - y_true)))
+
+
+def SubpixelConv2D(input_shape, scale=4):
+    """
+    Keras layer to do subpixel convolution.
+    NOTE: Tensorflow backend only. Uses tf.depth_to_space
+    Ref:
+        [1] Real-Time Single Image and Video Super-Resolution Using an Efficient Sub-Pixel Convolutional Neural Network
+            Shi et Al.
+            https://arxiv.org/abs/1609.05158
+    :param input_shape: tensor shape, (batch, height, width, channel)
+    :param scale: upsampling scale. Default=4
+    :return:
+    """
+    # upsample using depth_to_space
+    def subpixel_shape(input_shape):
+        dims = [input_shape[0],
+                input_shape[1] * scale,
+                input_shape[2] * scale,
+                int(input_shape[3] / (scale ** 2))]
+        output_shape = tuple(dims)
+        return output_shape
+
+    def subpixel(x):
+        return tf.depth_to_space(x, scale)
+
+
+    return Lambda(subpixel, output_shape=subpixel_shape, name='subpixel')
+
+
