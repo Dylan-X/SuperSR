@@ -5,6 +5,7 @@ import numpy as np
 import os
 import sys
 import shutil
+from ast import literal_eval # used to transform str to dic, because dic cannot be saved in h5file. 
 
 
 """
@@ -298,8 +299,17 @@ def merge_to_whole(images, size, stride):
 image_generator
 """
 class Dataset(object):
-    def __init__(self, 
-                image_dir, 
+    def __init__(self, image_dir, data_label_path=None):
+        """
+        if data and label have already saved, save_path 
+        should be the path to h5 or dir of blocks.  
+        """
+        self.image_dir = os.path.abspath(image_dir)
+        self.save_path = data_label_path
+        if self.save_path != None:
+            self._unpack()
+
+    def config_preprocess(self,  
                 num_img_max=100, 
                 color_mode='F', 
 
@@ -313,8 +323,10 @@ class Dataset(object):
                 downsample_mode='bicubic',
                 scale=4,
                 lr_size=None):
-
-        self.image_dir = os.path.abspath(image_dir)
+        """
+        Configure the preprocessing param. 
+        """
+        
         self.num_image = num_img_max
         self.image_color_mode = color_mode
         if self.image_color_mode == 'F':
@@ -333,6 +345,7 @@ class Dataset(object):
 
         self.downsample_mode = downsample_mode
         self.scale = scale
+        assert hr_size%self.scale == 0, 'Hr size is not dividable by scale!'
         if isinstance(lr_size, int):
             self.lr_size = (lr_size, lr_size)
         elif lr_size == 'same':
@@ -350,6 +363,59 @@ class Dataset(object):
         self.batch_size = None
         self.shuffle = None
 
+        self._pack_up()
+
+    def _pack_up(self):
+        """
+        package up the param of preprocessing to save together with data and label. 
+        """
+
+        self.image = {}
+        self.image['num_image'] = self.num_image
+        self.image['color_mode'] = self.image_color_mode
+        self.image['channel'] = self.channel
+
+        self.slice = {}
+        self.slice['slice_mode'] = self.slice_mode
+        self.slice['hr_size'] = self.hr_size #int
+        self.slice['stride'] = self.stride
+        self.slice['num_blocks'] = self.num
+        self.slice['threshold'] = self.threshold
+        self.slice['seed'] = self.seed
+
+        self.downsample = {}
+        self.downsample['downsample_mode'] = self.downsample_mode
+        self.downsample['scale'] = self.scale
+        self.downsample['lr_size'] = self.lr_size #tuple
+
+    def _unpack(self):
+        """
+        Unpack configuration param from saved h5file or directory. 
+        """
+        if os.path.isdir(self.save_path):
+            raise NotImplementedError
+        elif os.path.isfile(self.save_path):
+            with h5py.File(self.save_path, 'r') as hf:
+                self.image = literal_eval(hf['image'].value)
+                self.slice = literal_eval(hf['slice'].value)
+                self.downsample = literal_eval(hf['downsample'].value)
+
+            self.num_img_max = self.image['num_image']
+            self.image_color_mode = self.image['color_mode']
+            self.channel = self.image['channel']
+            
+            self.slice_mode = self.slice['slice_mode']
+            self.hr_size = self.slice['hr_size']
+            self.stride = self.slice['stride']
+            self.num = self.slice['num_blocks']
+            self.threshold = self.slice['threshold']
+            self.seed = self.slice['seed']
+
+            self.downsample_mode = self.downsample['downsample_mode']
+            self.scale = self.downsample['scale']
+            self.lr_size = self.downsample['lr_size']
+
+
     def _data_label_(self, image_name):
         """
         Generate data and label of single picture. 
@@ -360,7 +426,7 @@ class Dataset(object):
         Input:
             image_name to be processed.
         Return:
-            Data and Label to be fitted in CNN. 4-d numpy arr. 
+            Data and Label to be fed in CNN. 4-D numpy arr. 
             size_merge, tuple, used to merge the whole image if slicing normally. 
         """
         assert self.image_color_mode in ('F', 'RGB', 'YCbCr', 'RGBA'), "Wrong mode of color \
@@ -419,6 +485,10 @@ class Dataset(object):
                     break
 
             hf.create_dataset('num_subimages', data=num_dataInH5File)
+            # dict cannot be saved in h5file, use string instead. 
+            hf.create_dataset('image', data=str(self.image))
+            hf.create_dataset('slice', data=str(self.slice)) 
+            hf.create_dataset('downsample', data=str(self.downsample))
 
     def _save_dir(self, verbose=1):
         raise NotImplementedError
@@ -456,6 +526,7 @@ class Dataset(object):
 
             return self._save_dir(verbose=verbose)
 
+
     def _image_flow_from_h5(self, big_batch_size=1000):
         """
         A python generator, to generate patch of data and label. 
@@ -474,7 +545,7 @@ class Dataset(object):
             if big_batch_size != None:
                 while True:
                     with h5py.File(self.save_path, 'r') as hf:
-                        N = int(hf['num_subimages'])
+                        N = int(hf['num_subimages'].value)
                         index_generator = self._index_generator(big_batch_size)
                         for i in range(N//big_batch_size):
                             data = hf['data'][i*big_batch_size : (i+1)*big_batch_size]
@@ -490,7 +561,7 @@ class Dataset(object):
             else:
                 while True:
                     with h5py.File(self.save_path, 'r') as hf:
-                        N = int(hf['num_subimages'])
+                        N = int(hf['num_subimages'].value)
                         index_generator = self._index_generator(N)
                         index_array, _, current_batch_size = next(index_generator)
                         batch_x = np.zeros((current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
@@ -530,11 +601,10 @@ class Dataset(object):
 
         assert self._is_saved(), "Please save the data and label first! \nOr claim the link of saved file to this instance by call 'save_data_label' func!"
 
-        if self.save_mode == 'h5':
+        if os.path.isfile(self.save_path):
             return self._image_flow_from_h5(big_batch_size=big_batch_size)
-        elif self.save_mode == 'dir':
+        elif os.path.isdir(self.save_path):
             return self._image_flow_from_dir(big_batch_size=big_batch_size)
-
 
     def _index_generator(self, N):
         batch_size = self.batch_size
@@ -564,80 +634,25 @@ class Dataset(object):
 
             yield (index_array[current_index: current_index + current_batch_size],
                 current_index, current_batch_size)
-            
+
+  
     def get_num_data(self):
         assert self._is_saved(), 'Data hasn\'t been saved!'
-        if self.save_mode == 'dir':
+        if os.path.isdir(self.save_path):
             raise NotImplementedError
-        elif self.save_mode == 'h5':
+        elif os.path.isfile(self.save_path):
             with h5py.File(self.save_path, 'r') as hf:
-                num_data = int(hf['num_subimages'])
-        return num_data      
-    
-    def reset(self, 
-                num_img_max=100, 
-                color_mode='F', 
+                num_data = int(hf['num_subimages'].value)
+        return num_data
 
-                slice_mode='normal',
-                hr_size=48,
-                stride=16,
-                num_blocks=None,
-                threshold=None,
-                seed=None,
-
-                downsample_mode='bicubic',
-                scale=4,
-                lr_size=None):
-        """
-        Image dir will not be changed. 
-        Only image-preprocessing related param can be changed.
-        H5 file or blocks dir will be removed. 
-        """
+    def cancel_save(self):
         # delete the h5 file or saving dir. 
         if self._is_saved():
-            if self.save_mode == 'h5':
+            if os.path.isfile(self.save_path):
                 os.remove(self.save_path)
-            elif self.save_mode == 'dir':
+            elif os.path.isdir(self.save_path):
                 shutil.rmtree(self.save_path)
-        
-        
-        # reset all attri
-        self.num_image = num_img_max
-        self.image_color_mode = color_mode
-        if self.image_color_mode == 'F':
-            self.channel = 1
-        elif self.image_color_mode == 'RGBA':
-            self.channel = 4
-        else:
-            self.channel = 3
-
-        self.slice_mode = slice_mode
-        self.hr_size = hr_size
-        self.stride = stride
-        self.num = num_blocks
-        self.threshold = threshold
-        self.seed = seed
-
-        self.downsample_mode = downsample_mode
-        self.scale = scale
-        if isinstance(lr_size, int):
-            self.lr_size = (lr_size, lr_size)
-        elif lr_size == 'same':
-            self.lr_size = (self.hr_size, self.hr_size)
-        elif lr_size == None:
-            self.lr_size = (hr_size // self.scale, hr_size // self.scale)
-        else:
-            assert isinstance(lr_size, tuple), 'Wrong type of parameter --lr_size, should be int or tuple or None or "same"'
-            self.lr_size = lr_size
-
-        # these param will be changed when saving func or datagen func is called. 
-        self.save_path = None
-        self.save_mode = None
-        
-        self.batch_size = None
-        self.shuffle = None
-
-
+            
     def _is_saved(self):
         if self.save_path != None and os.path.exists(self.save_path):
             return True
