@@ -371,7 +371,7 @@ class Dataset(object):
         """
 
         self.image = {}
-        self.image['num_image'] = self.num_img_max
+        self.image['num_image'] = self.num_image
         self.image['color_mode'] = self.image_color_mode
         self.image['channel'] = self.channel
 
