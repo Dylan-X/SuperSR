@@ -326,7 +326,6 @@ class Dataset(object):
         """
         Configure the preprocessing param. 
         """
-        self.configured = True
         
         self.num_image = num_img_max
         self.image_color_mode = color_mode
@@ -370,6 +369,12 @@ class Dataset(object):
         """
         package up the param of preprocessing to save together with data and label. 
         """
+
+        self.image = {}
+        self.image['num_image'] = self.num_img_max
+        self.image['color_mode'] = self.image_color_mode
+        self.image['channel'] = self.channel
+
         self.slice = {}
         self.slice['slice_mode'] = self.slice_mode
         self.slice['hr_size'] = self.hr_size, #int
@@ -391,9 +396,14 @@ class Dataset(object):
             raise NotImplementedError
         elif os.path.isfile(self.save_path):
             with h5py.File(self.save_path, 'r') as hf:
+                self.image = literal_eval(hf['image'].value)
                 self.slice = literal_eval(hf['slice'].value)
                 self.downsample = literal_eval(hf['downsample'].value)
-                
+
+            self.num_img_max = self.image['num_image']
+            self.image_color_mode = self.image['color_mode']
+            self.channel = self.image['channel']
+            
             self.slice_mode = self.slice['slice_mode']
             self.hr_size = self.slice['hr_size']
             self.stride = self.slice['stride']
@@ -475,7 +485,9 @@ class Dataset(object):
                     break
 
             hf.create_dataset('num_subimages', data=num_dataInH5File)
-            hf.create_dataset('slice', data=str(self.slice)) # dict cannot be saved in h5file, use string instead. 
+            # dict cannot be saved in h5file, use string instead. 
+            hf.create_dataset('image', data=str(self.image))
+            hf.create_dataset('slice', data=str(self.slice)) 
             hf.create_dataset('downsample', data=str(self.downsample))
 
     def _save_dir(self, verbose=1):
