@@ -377,7 +377,7 @@ class Dataset(object):
 
         self.slice = {}
         self.slice['slice_mode'] = self.slice_mode
-        self.slice['hr_size'] = self.hr_size, #int
+        self.slice['hr_size'] = self.hr_size #int
         self.slice['stride'] = self.stride
         self.slice['num_blocks'] = self.num
         self.slice['threshold'] = self.threshold
