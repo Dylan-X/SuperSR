@@ -9,7 +9,7 @@ import numpy as np
 import tensorflow as tf
 
 # psnr loss definition:
-def psnr_k(y_true, y_pred):
+def PSNR(y_true, y_pred):
     """
     PSNR is Peek Signal to Noise Ratio, which is similar to mean squared error.
 
@@ -22,7 +22,7 @@ def psnr_k(y_true, y_pred):
     """
     return -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
 
-def psnr_np(y_true, y_pred):
+def psnr(y_true, y_pred):
     assert y_true.shape == y_pred.shape, "Cannot calculate PSNR. Input shapes not same." \
                                          " y_true shape = %s, y_pred shape = %s" % (str(y_true.shape),
                                                                                    str(y_pred.shape))
