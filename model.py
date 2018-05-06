@@ -10,7 +10,7 @@ import keras.optimizers as optimizers
 from keras import backend as K
 from advanced import  TensorBoardBatch
 from image_utils import Dataset, downsample, merge_to_whole
-from utils import psnr_k, psnr_np, SubpixelConv2D
+from utils import PSNR, psnr, SubpixelConv2D
 import numpy as np
 import os
 import warnings
@@ -19,14 +19,14 @@ import h5py
 import tensorflow as tf
 
 class BaseSRModel(object):
-    def __init__(self, model_name, input_size):
+    def __init__(self, model_name, input_size, ):
         """
         Input:
             model_name, str, name of this model
             input_size, tuple, size of input. e.g. (48, 48, 3)
         """
         self.model_name = model_name
-        self.weight_path=None
+        self.weight_path = "weights/%s.h5"%(self.model_name)
         self.input_size=input_size
         self.channel=self.input_size[-1]
         self.model=self.create_model(load_weights=False)
@@ -60,13 +60,15 @@ class BaseSRModel(object):
         if self.model == None: self.create_model()
 
         adam = optimizers.Adam(lr=learning_rate)
-        self.model.compile(optimizer=adam, loss=loss, metrics=[psnr_k])
+        self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
-        callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_loss',
+        # callback_list.append(HistoryCheckpoint(history_fn))
+        callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR',
                                                         save_best_only=True, mode='min', 
                                                         save_weights_only=True, verbose=2))
         if save_history:
+            log_dir = os.path.join(log_dir, self.model_name)
             callback_list.append(TensorBoardBatch(log_dir=log_dir, batch_size=batch_size, histogram_freq=1,
                                                     write_grads=visual_grads, write_graph=visual_graph, write_images=visual_weight_image))
 
@@ -102,10 +104,10 @@ class BaseSRModel(object):
         lr_img = downsample(hr_img, scale=scale, lr_size=lr_size)
         sr_img = merge_to_whole(output, size_merge, stride = stride)
         if verbose == 1:
-            print('PSNR is %f'%(psnr_np(sr_img, hr_img)))
+            print('PSNR is %f'%(psnr(sr_img, hr_img)))
         if save:
             scipy.misc.imsave(sr_img, './example/%s_SR.png'%(image_name))
-        return hr_img, lr_img, sr_img, psnr_np(sr_img, hr_img)
+        return hr_img, lr_img, sr_img, psnr(sr_img, hr_img)
 
     def evaluate(self, test_dst=Dataset('./test_image/'), verbose = 0) -> Model:
         """
@@ -144,8 +146,7 @@ class SRCNN(BaseSRModel):
         self.n1 = 64
         self.n2 = 32
 
-        self.weight_path = "weights/SRCNN Weights %s.h5" % (model_type)
-        super(SRCNN, self).__init__("SRCNN"+model_type, input_size)        
+        super(SRCNN, self).__init__("SRCNN_"+model_type, input_size)        
     
     def create_model(self, load_weights=False):
 
@@ -164,7 +165,8 @@ class SRCNN(BaseSRModel):
 
         self.model = model
         return model
-        
+
+
 class ResNetSR(BaseSRModel):
     """
     Under test. A little different from original paper. 
@@ -177,8 +179,7 @@ class ResNetSR(BaseSRModel):
         self.f = 3  # filter size
         self.scale = scale # by diff scales comes to diff model structure in upsampling layers. 
 
-        self.weight_path = "weights/ResNetSR Weights %s.h5" % (model_type)
-        super(ResNetSR, self).__init__("ResNetSR"+model_type, input_size)
+        super(ResNetSR, self).__init__("ResNetSR_"+model_type, input_size)
 
     def create_model(self, load_weights=False, nb_residual = 5):
 
@@ -244,8 +245,7 @@ class EDSR(BaseSRModel):
     	self.f = 3 # shape of filter. kernel_size
     	self.scale_res = 0.1 # used in each residual net
     	self.scale = scale # by diff scales comes to diff model structure in upsampling layers. 
-    	self.weight_path = "weights/EDSR Weights %s.h5" % (model_type)
-    	super(EDSR, self).__init__("EDSR"+model_type, input_size)
+    	super(EDSR, self).__init__("EDSR_"+model_type, input_size)
 
     def create_model(self, load_weights = False, nb_residual = 10):
 
@@ -268,7 +268,7 @@ class EDSR(BaseSRModel):
 
         model = Model(init, out)
         adam = optimizers.Adam(lr=1e-4)
-        model.compile(optimizer=adam, loss='mae', metrics=[psnr_k])
+        model.compile(optimizer=adam, loss='mae', metrics=[PSNR])
 
         if load_weights: 
             model.load_weights(self.weight_path, by_name=True)
