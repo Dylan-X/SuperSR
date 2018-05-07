@@ -97,14 +97,15 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
             'bicubic' or 'cubic').
         lr_size : tuple or int, the output size of lr_image. None if keep size after scaling. 
     Return:
-        Image with shape of 1/scale**2, which has been squeezed. (No dimension with length of 1)
+        Image_hr which has been modcropped. 
+        Image_lr with shape of 1/scale**2, which has been squeezed. (No dimension with length of 1)
          
     """
     image, is_patch_ = modcrop(image, scale)
     if lr_size != None :
         assert isinstance(lr_size, int) or isinstance(lr_size, tuple) or lr_size == 'same', "Wrong type of lr_size which should be int or tuple type or 'same'."
-    if isinstance(lr_size, int):
-        lr_size = (lr_size, lr_size)
+        if isinstance(lr_size, int):
+            lr_size = (lr_size, lr_size)
 
     if is_patch_:
         assert len(image.shape) in (3, 4), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 3 or 4-D!'
@@ -116,15 +117,13 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
             elif lr_size == 'same':
                 img_lr = imresize(img_lr, img.shape, interp='bicubic')
             data.append(img_lr)
-        return np.array(data)
+        return image, np.array(data)
     else:
         assert len(image.shape) in (2, 3), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 2 or 3-D!'
         image_lr = imresize(image, 1/scale, interp=interp)
-        if lr_size is not None and lr_size != 'same':
-            image_lr = imresize(image_lr, lr_size, interp='bicubic')
-        elif lr_size == 'same':
-            image_lr = imresize(image_lr, image.shape, interp='bicubic')
-        return image_lr
+        if lr_size == 'same':
+            image_lr = imresize(image_lr, image.shape[:2], interp='bicubic')
+        return image, image_lr
         
 
 
@@ -231,7 +230,7 @@ def im_slice(image, size, stride, num=None, threshold=None, seed=None, mode='nor
     See _slice, _slice_rm_redundance, _slice_random for details. 
     Inputs:
         image, ndarray
-        size, int
+        size, int or tuple
         stride, int
         num, int. If mode is random, num's value will decide the number of blocks to generate. 
         threshold, int. If mode is rm_redundance, threshold's value will decide the redundance threshold. 
@@ -239,6 +238,8 @@ def im_slice(image, size, stride, num=None, threshold=None, seed=None, mode='nor
         mode : str. It should be normal, random or rm_redundance. 
     """
     assert mode in ('random', 'rm_redundance', 'normal'), 'Wrong mode, mode should be random, rm_redundance or normal!'
+    if isinstance(size, tuple): size = size[0]
+
     if mode == 'random':
         assert isinstance(num, int), 'param \'num\' should be integer!'
         return _slice_random(image, size, stride, num, seed)
@@ -322,7 +323,8 @@ class Dataset(object):
 
                 downsample_mode='bicubic',
                 scale=4,
-                lr_size=None):
+                lr_size=None,
+                slice_first=False):
         """
         Configure the preprocessing param. 
         """
@@ -356,6 +358,8 @@ class Dataset(object):
             assert isinstance(lr_size, tuple), 'Wrong type of parameter --lr_size, should be int or tuple or None or "same"'
             self.lr_size = lr_size
 
+        self.slice_first = slice_first
+
         # these param will be changed when saving func or datagen func is called. 
         self.save_path = None
         self.save_mode = None
@@ -388,6 +392,7 @@ class Dataset(object):
         self.downsample['scale'] = self.scale
         self.downsample['lr_size'] = self.lr_size #tuple
 
+
     def _unpack(self):
         """
         Unpack configuration param from saved h5file or directory. 
@@ -416,7 +421,7 @@ class Dataset(object):
             self.lr_size = self.downsample['lr_size']
 
 
-    def _data_label_(self, image_name):
+    def _data_label_slice_first(self, image_name):
         """
         Generate data and label of single picture. 
             Read image from path.
@@ -439,13 +444,63 @@ class Dataset(object):
                                         num=self.num, threshold=self.threshold, seed=self.seed, \
                                         mode=self.slice_mode)
         # image downsampling.
-        data = downsample(label, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
+        label, data = downsample(label, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
 
         # formulate the data and label to 4-d numpy array and scale to (0, 1)
         data = formulate(data) / 255.
         label = formulate(label) / 255.
 
         return data, label, N, size_merge
+
+    def _data_label_downsample_first(self, image_name):
+        """
+        Generate data and label of single picture. 
+            Read image from path.
+            Slice image into blocks.
+            Downsample blocks to lr blocks.
+        Can be overwrited if use other ways to preprocess images. 
+        Input:
+            image_name to be processed.
+        Return:
+            Data and Label to be fed in CNN. 4-D numpy arr. 
+            size_merge, tuple, used to merge the whole image if slicing normally. 
+        """
+        assert self.image_color_mode in ('F', 'RGB', 'YCbCr', 'RGBA'), "Wrong mode of color \
+                                        which should be in ('F', 'RGB', 'YCbCr', 'RGBA')"
+
+        if self.lr_size[0]==self.hr_size :
+            lr_size='same'
+            stride=self.stride
+        else:
+            lr_size=None
+            stride=self.stride//self.scale
+        # read image from image_path. 
+        image = imread(os.path.join(self.image_dir, image_name), mode = self.image_color_mode).astype(np.float)
+
+        # image downsampling.
+        hr_img, lr_img = downsample(image, scale=self.scale, interp=self.downsample_mode, lr_size=lr_size)
+        
+        # image slicing. 
+        N, label, size_merge = im_slice(hr_img, size=self.hr_size, stride=self.stride, \
+                                        num=self.num, threshold=self.threshold, seed=self.seed, \
+                                        mode=self.slice_mode)
+        _, data, _ = im_slice(lr_img, size=self.lr_size,stride=stride, \
+                                        num=self.num, threshold=self.threshold, seed=self.seed, \
+                                        mode=self.slice_mode)
+        # formulate the data and label to 4-d numpy array and scale to (0, 1)
+        data = formulate(data) / 255.
+        label = formulate(label) / 255.
+
+        return data, label, N, size_merge
+
+    def _data_label_(self, image_name):
+        if self.slice_first:
+            return self._data_label_slice_first(image_name)
+        else:
+            assert self.slice_mode == 'normal', 'Slice should be normal if slice after downsample. '
+            assert self.stride%self.scale == 0, 'stride should be dividable by scale. '
+            return self._data_label_downsample_first(image_name)
+
 
     def _save_H5(self, verbose=1):
         """
