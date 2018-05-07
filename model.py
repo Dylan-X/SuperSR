@@ -165,51 +165,6 @@ class SRCNN(BaseSRModel):
 
         self.model = model
         return model
-    
-    # def fit(self, 
-    #         train_dst=Dataset('./test_image/'), 
-    #         val_dst=Dataset('./test_image/'),
-    #         big_batch_size=1000, 
-    #         batch_size=16, 
-    #         learning_rate=1e-4, 
-    #         loss='mse', 
-    #         shuffle=True,
-    #         visual_graph=True, 
-    #         visual_grads=True, 
-    #         visual_weight_image=True, 
-    #         multiprocess=False,
-    #         nb_epochs=100, 
-    #         save_history=True, 
-    #         log_dir='./logs') -> Model:
-        
-    #     assert train_dst._is_saved(), 'Please save the data and label in train_dst first!'
-    #     assert val_dst._is_saved(), 'Please save the data and label in val_dst first!'
-    #     train_count = train_dst.get_num_data()
-    #     val_count = val_dst.get_num_data()
-
-    #     if self.model == None: self.create_model()
-
-    #     adam = optimizers.Adam(lr=learning_rate)
-    #     self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
-
-    #     callback_list = []
-    #     # callback_list.append(HistoryCheckpoint(history_fn))
-    #     callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR',
-    #                                                     save_best_only=True, mode='max', 
-    #                                                     save_weights_only=True, verbose=2))
-    #     if save_history:
-    #         log_dir = os.path.join(log_dir, self.model_name)
-    #         callback_list.append(TensorBoardBatch(log_dir=log_dir, batch_size=batch_size, histogram_freq=1,
-    #                                                 write_grads=visual_grads, write_graph=visual_graph, write_images=visual_weight_image))
-
-    #     print('Training model : %s'%(self.model_name))
-
-    #     data_label = h5py.File(train_dst.save_path, 'a')
-    #     data = np.array(data_label['data'])
-    #     label = np.array(data_label['label'])
-
-    #     self.model.fit(data, label, batch_size=batch_size, epochs=nb_epochs, verbose=1,callbacks=callback_list, validation_split=0.2)
-    #     return self.model                     
 
 class ResNetSR(BaseSRModel):
     """
