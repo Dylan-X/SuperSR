@@ -316,7 +316,7 @@ class Dataset(object):
 
                 slice_mode='normal',
                 hr_size=48,
-                stride=16,
+                stride=24,
                 num_blocks=None,
                 threshold=None,
                 seed=None,

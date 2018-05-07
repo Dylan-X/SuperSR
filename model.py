@@ -65,7 +65,7 @@ class BaseSRModel(object):
         callback_list = []
         # callback_list.append(HistoryCheckpoint(history_fn))
         callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR',
-                                                        save_best_only=True, mode='min', 
+                                                        save_best_only=True, mode='max', 
                                                         save_weights_only=True, verbose=2))
         if save_history:
             log_dir = os.path.join(log_dir, self.model_name)
