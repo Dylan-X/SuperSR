@@ -59,7 +59,8 @@ class BaseSRModel(object):
 
         if self.model == None: self.create_model()
 
-        adam = optimizers.Adam(lr=learning_rate)
+        adam = optimizers.Nadam()
+        # adam = optimizers.Adam(lr=learning_rate)
         self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
