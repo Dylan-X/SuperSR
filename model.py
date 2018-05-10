@@ -98,7 +98,7 @@ class BaseSRModel(object):
         lr_size = test_dst.lr_size
         assert test_dst.slice_mode=='normal', 'Cannot be merged if blocks are not completed. '
 
-        data, label, size_merge = test_dst._data_label_(image_name)
+        data, label, _, size_merge = test_dst._data_label_(image_name)
         output = self.model.predict(data, verbose=verbose)
         # merge all subimages. 
         hr_img = merge_to_whole(label, size_merge, stride = stride)
@@ -108,7 +108,7 @@ class BaseSRModel(object):
             print('PSNR is %f'%(psnr(sr_img, hr_img)))
         if save:
             scipy.misc.imsave(sr_img, './example/%s_SR.png'%(image_name))
-        return hr_img, lr_img, sr_img, psnr(sr_img, hr_img)
+        return hr_img, lr_img, sr_img, psnr(sr_img/255., hr_img/255.)
 
     def evaluate(self, test_dst=Dataset('./test_image/'), verbose = 0) -> Model:
         """

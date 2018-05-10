@@ -91,7 +91,7 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
     Input: 
         image : numpy array with shape of ([N, ] size, size [, channel])  
         scale : int
-            Scale to downsample. 
+            Scale to downsample.
         interp : str, optional
             Interpolation to use for re-sizing ('nearest', 'lanczos', 'bilinear',
             'bicubic' or 'cubic').
@@ -110,14 +110,16 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
     if is_patch_:
         assert len(image.shape) in (3, 4), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 3 or 4-D!'
         data = []
+        label = []
         for _, img in enumerate(image):
             img_lr = imresize(img, 1/scale, interp=interp)
             if lr_size is not None and lr_size != 'same':
                 img_lr = imresize(img_lr, lr_size, interp='bicubic')
             elif lr_size == 'same':
-                img_lr = imresize(img_lr, img.shape, interp='bicubic')
+                img_lr = imresize(img_lr, img.shape[:2], interp='bicubic')
             data.append(img_lr)
-        return image, np.array(data)
+            label.append(img)
+        return np.array(label), np.array(data)
     else:
         assert len(image.shape) in (2, 3), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 2 or 3-D!'
         image_lr = imresize(image, 1/scale, interp=interp)
@@ -440,11 +442,11 @@ class Dataset(object):
         image = imread(os.path.join(self.image_dir, image_name), mode = self.image_color_mode).astype(np.float)
 
         # image slicing. 
-        N, label, size_merge = im_slice(image, size=self.hr_size, stride=self.stride, \
+        N, sub_imgs, size_merge = im_slice(image, size=self.hr_size, stride=self.stride, \
                                         num=self.num, threshold=self.threshold, seed=self.seed, \
                                         mode=self.slice_mode)
         # image downsampling.
-        label, data = downsample(label, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
+        label, data = downsample(sub_imgs, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
 
         # formulate the data and label to 4-d numpy array and scale to (0, 1)
         data = formulate(data) / 255.
