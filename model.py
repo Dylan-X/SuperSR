@@ -41,7 +41,7 @@ class BaseSRModel(object):
             val_dst=Dataset('./test_image/'),
             big_batch_size=1000, 
             batch_size=16, 
-            learning_rate=1e-3, 
+            learning_rate=1e-4, 
             loss='mse', 
             shuffle=True,
             visual_graph=True, 
@@ -59,8 +59,8 @@ class BaseSRModel(object):
 
         if self.model == None: self.create_model()
 
-        adam = optimizers.Nadam()
-        # adam = optimizers.Adam(lr=learning_rate)
+        # adam = optimizers.Nadam()
+        adam = optimizers.Adam(lr=learning_rate)
         self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
