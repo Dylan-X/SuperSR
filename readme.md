@@ -10,8 +10,12 @@ A completion of data-preprocessing and models of SR(based on CNN) research.
 
     Try PyTables to save and generate data. 
 
-    Finish the downsample first mode when generating data and label. 
+    **Finish the downsample first mode when generating data and label. **
 
     Comments are incomplete, stucture is under enhanced.
+
+    Delete the slice first mode and set downsample first mode as Default.
+
+    Tensorboard visulization is incompleted. Weights visualization need to be considered. 
 
 
