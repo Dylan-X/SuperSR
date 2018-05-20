@@ -231,7 +231,7 @@ def _is_redundance(subim, blocks, Threshold):
     return True
 
 
-def _slice_rm_redundance(images, size=48, stride=24, threshold=50, scale=2):
+def _slice_rm_redundance(images, size=48, stride=24, scale=2, threshold=50):
     """
     Slice the image into blocks with removing redundance, which cannot be reconstructed.
     Input:
@@ -290,7 +290,7 @@ def _slice_rm_redundance(images, size=48, stride=24, threshold=50, scale=2):
         raise ValueError
 
 
-def _slice_random(images, size, stride, num, seed=None, scale=2):
+def _slice_random(images, size, stride, scale, num, seed=None):
     """
     Slicing the image randomly. 
     Input:
@@ -321,12 +321,12 @@ def _slice_random(images, size, stride, num, seed=None, scale=2):
         print('Wrong size of images, length of which should be 1 or 2!')
         raise ValueError
 
-def im_slice(image, size, stride, num=None, threshold=None, seed=None, mode='normal'):
+def im_slice(images, size, stride, scale, num=None, threshold=None, seed=None, mode='normal'):
     """
     With different mode, return different subimages. 
     See _slice, _slice_rm_redundance, _slice_random for details. 
     Inputs:
-        image, ndarray
+        image, list, with numpy array
         size, int or tuple
         stride, int
         num, int. If mode is random, num's value will decide the number of blocks to generate. 
@@ -341,13 +341,13 @@ def im_slice(image, size, stride, num=None, threshold=None, seed=None, mode='nor
 
     if mode == 'random':
         assert isinstance(num, int), 'param \'num\' should be integer!'
-        return _slice_random(image, size, stride, num, seed)
+        return _slice_random(images, size, stride, scale, num, seed)
     elif mode == 'rm_redundance':
         assert isinstance(
             threshold, int), 'param \'threshold\' should be integer!'
-        return _slice_rm_redundance(image, size, stride, threshold)
+        return _slice_rm_redundance(images, size, stride, scale, threshold)
     else:
-        return _slice(image, size, stride)
+        return _slice(images, size, stride, scale)
 
 
 def _merge_gray_(images, size, stride):
@@ -429,8 +429,7 @@ class Dataset(object):
 
                           downsample_mode='bicubic',
                           scale=4,
-                          lr_size=None,
-                          slice_first=False):
+                          lr_size=None):
         """
         Configure the preprocessing param. 
         """
@@ -464,8 +463,6 @@ class Dataset(object):
             assert isinstance(
                 lr_size, tuple), 'Wrong type of parameter --lr_size, should be int or tuple or None or "same"'
             self.lr_size = lr_size
-
-        self.slice_first = slice_first
 
         # these param will be changed when saving func or datagen func is called.
         self.save_path = None
@@ -526,7 +523,7 @@ class Dataset(object):
             self.scale = self.downsample['scale']
             self.lr_size = self.downsample['lr_size']
 
-    def _data_label_slice_first(self, image_name):
+    def _data_label_(self, image_name):
         """
         Generate data and label of single picture. 
             Read image from path.
@@ -541,74 +538,25 @@ class Dataset(object):
         """
         assert self.image_color_mode in ('F', 'RGB', 'YCbCr', 'RGBA'), "Wrong mode of color \
                                         which should be in ('F', 'RGB', 'YCbCr', 'RGBA')"
-        # read image from image_path.
-        image = imread(os.path.join(self.image_dir, image_name),
-                       mode=self.image_color_mode).astype(np.float)
-
-        # image slicing.
-        N, sub_imgs, size_merge = im_slice(image, size=self.hr_size, stride=self.stride,
-                                           num=self.num, threshold=self.threshold, seed=self.seed,
-                                           mode=self.slice_mode)
-        # image downsampling.
-        label, data = downsample(
-            sub_imgs, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
-
-        # formulate the data and label to 4-d numpy array and scale to (0, 1)
-        data = formulate(data) / 255.
-        label = formulate(label) / 255.
-
-        return data, label, N, size_merge
-
-    def _data_label_downsample_first(self, image_name):
-        """
-        Generate data and label of single picture. 
-            Read image from path.
-            Slice image into blocks.
-            Downsample blocks to lr blocks.
-        Can be overwrited if use other ways to preprocess images. 
-        Input:
-            image_name to be processed.
-        Return:
-            Data and Label to be fed in CNN. 4-D numpy arr. 
-            size_merge, tuple, used to merge the whole image if slicing normally. 
-        """
-        assert self.image_color_mode in ('F', 'RGB', 'YCbCr', 'RGBA'), "Wrong mode of color \
-                                        which should be in ('F', 'RGB', 'YCbCr', 'RGBA')"
-
-        if self.lr_size[0] == self.hr_size:
-            lr_size = 'same'
-            stride = self.stride
-        else:
-            lr_size = None
-            stride = self.stride//self.scale
         # read image from image_path.
         image = imread(os.path.join(self.image_dir, image_name),
                        mode=self.image_color_mode).astype(np.float)
 
         # image downsampling.
         hr_img, lr_img = downsample(
-            image, scale=self.scale, interp=self.downsample_mode, lr_size=lr_size)
+            image, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
 
         # image slicing.
-        N, label, size_merge = im_slice(hr_img, size=self.hr_size, stride=self.stride,
+        N, l_out, size_merge = im_slice((hr_img, lr_img), size=self.hr_size, stride=self.stride, scale=self.scale,
                                         num=self.num, threshold=self.threshold, seed=self.seed,
                                         mode=self.slice_mode)
-        _, data, _ = im_slice(lr_img, size=self.lr_size, stride=stride,
-                              num=self.num, threshold=self.threshold, seed=self.seed,
-                              mode=self.slice_mode)
         # formulate the data and label to 4-d numpy array and scale to (0, 1)
+        data, label = l_out
         data = formulate(data) / 255.
         label = formulate(label) / 255.
 
         return data, label, N, size_merge
 
-    def _data_label_(self, image_name):
-        if self.slice_first:
-            return self._data_label_slice_first(image_name)
-        else:
-            assert self.slice_mode == 'normal', 'Slice should be normal if slice after downsample. '
-            assert self.stride % self.scale == 0, 'stride should be dividable by scale. '
-            return self._data_label_downsample_first(image_name)
 
     def _save_H5(self, verbose=1):
         """

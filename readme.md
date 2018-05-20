@@ -2,7 +2,7 @@
 
 A completion of data-preprocessing and models of SR(based on CNN) research.
 
-## To Do List : 
+## To Do List 
 
     Multiprocessing when generate h5 files and or subimages' dir
 
