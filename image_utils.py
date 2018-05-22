@@ -551,7 +551,7 @@ class Dataset(object):
                                         num=self.num, threshold=self.threshold, seed=self.seed,
                                         mode=self.slice_mode)
         # formulate the data and label to 4-d numpy array and scale to (0, 1)
-        data, label = l_out
+        label, data = l_out
         data = formulate(data) / 255.
         label = formulate(label) / 255.
 
@@ -579,7 +579,7 @@ class Dataset(object):
                 count += 1
                 # generate subimages of data and label to save.
                 data, label, N, _ = self._data_label_(filename)
-
+                # print(data.shape, label.shape)
                 # add subimages of this image into h5 file.
                 dataDst.resize((num_dataInH5File + N, )+dataDst_shape)
                 dataDst[num_dataInH5File: (
