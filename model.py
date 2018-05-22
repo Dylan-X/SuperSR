@@ -195,7 +195,8 @@ class ResNetSR(BaseSRModel):
 
         x = Add()([x, x0])
 
-        x = self._upscale_block(x, 1)
+        if self.scale != 1:
+            x = self._upscale_block(x, 1)
 
         x = Convolution2D(self.channel, (self.f, self.f), activation="linear", padding='same', name='sr_res_conv_final')(x)
 
@@ -234,8 +235,6 @@ class ResNetSR(BaseSRModel):
         x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
         return x
 
-    def fit(self, batch_size=128, nb_epochs=100, save_history=True, history_fn="ResNetSR History.txt"):
-        super(ResNetSR, self).fit(batch_size, nb_epochs, save_history, history_fn)
 
 class EDSR(BaseSRModel):
 
