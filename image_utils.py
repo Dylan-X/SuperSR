@@ -547,7 +547,11 @@ class Dataset(object):
             image, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
 
         # image slicing.
-        N, l_out, size_merge = im_slice((hr_img, lr_img), size=self.hr_size, stride=self.stride, scale=self.scale,
+        if self.lr_size[0] == self.hr_size:
+            scale = 1
+        else:
+            scale = self.scale
+        N, l_out, size_merge = im_slice((hr_img, lr_img), size=self.hr_size, stride=self.stride, scale=scale,
                                         num=self.num, threshold=self.threshold, seed=self.seed,
                                         mode=self.slice_mode)
         # formulate the data and label to 4-d numpy array and scale to (0, 1)
@@ -556,7 +560,6 @@ class Dataset(object):
         label = formulate(label) / 255.
 
         return data, label, N, size_merge
-
 
     def _save_H5(self, verbose=1):
         """
@@ -788,3 +791,18 @@ class Dataset(object):
             return True
         else:
             return False
+
+
+if __name__ == "__main__":
+    dst = Dataset('../datasets/Car_train/Car_train/')
+    dst.config_preprocess(num_img_max=4)
+    # dst._data_label_('n02960352_2638.JPEG')
+    # dst.save_data_label(save_path='./test.h5')
+    with h5py.File('./test.h5', 'r') as hf:
+        data, label = np.array(hf['data']), np.array(hf['label'])
+    import matplotlib.pyplot as plt
+    plt.subplot(121)
+    plt.imshow(data[100].squeeze(), 'gray')
+    plt.subplot(122)
+    plt.imshow(label[100].squeeze(), 'gray')
+    plt.show()
