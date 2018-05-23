@@ -791,12 +791,17 @@ if __name__ == "__main__":
     dst = Dataset('../datasets/Car_train/Car_train/')
     dst.config_preprocess(num_img_max=4, lr_size='same')
     # dst._data_label_('n02960352_2638.JPEG')
-    dst.save_data_label(save_path='./test.h5')
-    with h5py.File('./test.h5', 'r') as hf:
+    dst.save_data_label(save_path='./test1.h5')
+    with h5py.File('./test1.h5', 'r') as hf:
         data, label = np.array(hf['data']), np.array(hf['label'])
     import matplotlib.pyplot as plt
+    from utils import psnr
+    lr_sample = data[100].squeeze()
+    hr_sample = label[100].squeeze()
+    # lr_sample = imresize(lr_sample, hr_sample.shape[:2], interp='bicubic')/255.
+    print(psnr(lr_sample, hr_sample))
     plt.subplot(121)
-    plt.imshow(data[100].squeeze(), 'gray')
+    plt.imshow(lr_sample, 'gray')
     plt.subplot(122)
-    plt.imshow(label[100].squeeze(), 'gray')
+    plt.imshow(hr_sample, 'gray')
     plt.show()
