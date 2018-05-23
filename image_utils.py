@@ -181,7 +181,8 @@ def _slice(images, size=48, stride=24, scale=2):
     elif len(images) == 2:
         hr_patch = []
         lr_patch = []
-        nx = ny = 0
+        nx = 0
+        ny = 0
         hr_image, lr_image = images
         h, w = hr_image.shape[0:2]
         h_, w_ = lr_image.shape[0:2]
