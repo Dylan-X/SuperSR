@@ -106,18 +106,17 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
         interp : str, optional
             Interpolation to use for re-sizing ('nearest', 'lanczos', 'bilinear',
             'bicubic' or 'cubic').
-        lr_size : tuple or int, the output size of lr_image. None if keep size after scaling. 
+        lr_size : tuple or int or NoneType, the output size of lr_image. None if keep size after scaling. 
     Return:
         Image_hr which has been modcropped. 
-        Image_lr with shape of 1/scale**2, which has been squeezed. (No dimension with length of 1)
+        Image_lr with shape of 1/scale, which has been squeezed. (i.e. No dimension with length of 1)
 
     """
     image, is_patch_ = modcrop(image, scale)
-    if lr_size != None:
-        assert isinstance(lr_size, int) or isinstance(
-            lr_size, tuple) or lr_size == 'same', "Wrong type of lr_size which should be int or tuple type or 'same'."
-        if isinstance(lr_size, int):
-            lr_size = (lr_size, lr_size)
+    
+    # transfer lr_size to tuple 
+    if isinstance(lr_size, int):
+        lr_size = (lr_size, lr_size)
 
     if is_patch_:
         assert len(image.shape) in (
@@ -126,10 +125,8 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
         label = []
         for _, img in enumerate(image):
             img_lr = imresize(img, 1/scale, interp=interp)
-            if lr_size is not None and lr_size != 'same':
+            if lr_size is not None:
                 img_lr = imresize(img_lr, lr_size, interp='bicubic')
-            elif lr_size == 'same':
-                img_lr = imresize(img_lr, img.shape[:2], interp='bicubic')
             data.append(img_lr)
             label.append(img)
         return np.array(label), np.array(data)
@@ -137,8 +134,8 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
         assert len(image.shape) in (
             2, 3), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 2 or 3-D!'
         image_lr = imresize(image, 1/scale, interp=interp)
-        if lr_size == 'same':
-            image_lr = imresize(image_lr, image.shape[:2], interp='bicubic')
+        if lr_size is not None:
+            image_lr = imresize(image_lr, lr_size, interp='bicubic')
         return image, image_lr
 
 
@@ -795,14 +792,14 @@ class Dataset(object):
 
 if __name__ == "__main__":
     dst = Dataset('../datasets/Car_train/Car_train/')
-    dst.config_preprocess(num_img_max=4)
-    # dst._data_label_('n02960352_2638.JPEG')
-    # dst.save_data_label(save_path='./test.h5')
-    with h5py.File('./test.h5', 'r') as hf:
-        data, label = np.array(hf['data']), np.array(hf['label'])
-    import matplotlib.pyplot as plt
-    plt.subplot(121)
-    plt.imshow(data[100].squeeze(), 'gray')
-    plt.subplot(122)
-    plt.imshow(label[100].squeeze(), 'gray')
-    plt.show()
+    dst.config_preprocess(num_img_max=4, lr_size='same')
+    dst._data_label_('n02960352_2638.JPEG')
+    dst.save_data_label(save_path='./test.h5')
+    # with h5py.File('./test.h5', 'r') as hf:
+    #     data, label = np.array(hf['data']), np.array(hf['label'])
+    # import matplotlib.pyplot as plt
+    # plt.subplot(121)
+    # plt.imshow(data[100].squeeze(), 'gray')
+    # plt.subplot(122)
+    # plt.imshow(label[100].squeeze(), 'gray')
+    # plt.show()
