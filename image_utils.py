@@ -96,7 +96,7 @@ def modcrop(image, scale):
     return image, is_patch(image)
 
 
-def downsample(image, scale, interp='bicubic', lr_size=None):
+def downsample(image, scale, interp='bicubic', downsample_flag=None):
     """
     Down sample the image to 1/scale**2.
     Input: 
@@ -113,29 +113,27 @@ def downsample(image, scale, interp='bicubic', lr_size=None):
 
     """
     image, is_patch_ = modcrop(image, scale)
-    
-    # transfer lr_size to tuple 
-    if isinstance(lr_size, int):
-        lr_size = (lr_size, lr_size)
 
     if is_patch_:
         assert len(image.shape) in (
             3, 4), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 3 or 4-D!'
+
         data = []
         label = []
         for _, img in enumerate(image):
             img_lr = imresize(img, 1/scale, interp=interp)
-            if lr_size is not None:
-                img_lr = imresize(img_lr, lr_size, interp='bicubic')
+            if downsample_flag is not None:
+                img_lr = imresize(img_lr, img.shape[:2], interp='bicubic')
             data.append(img_lr)
             label.append(img)
         return np.array(label), np.array(data)
     else:
         assert len(image.shape) in (
             2, 3), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 2 or 3-D!'
+
         image_lr = imresize(image, 1/scale, interp=interp)
-        if lr_size is not None:
-            image_lr = imresize(image_lr, lr_size, interp='bicubic')
+        if downsample_flag is not None:
+            image_lr = imresize(image_lr, image.shape[:2], interp='bicubic')
         return image, image_lr
 
 
@@ -450,16 +448,15 @@ class Dataset(object):
         self.downsample_mode = downsample_mode
         self.scale = scale
         assert hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
-        if isinstance(lr_size, int):
-            self.lr_size = (lr_size, lr_size)
-        elif lr_size == 'same':
+        if lr_size == 'same':
+            self.downsample_flag = 'same'
             self.lr_size = (self.hr_size, self.hr_size)
         elif lr_size == None:
-            self.lr_size = (hr_size // self.scale, hr_size // self.scale)
+            self.downsample_flag = None
+            self.lr_size = (self.hr_size // self.scale, self.hr_size // self.scale)
         else:
-            assert isinstance(
-                lr_size, tuple), 'Wrong type of parameter --lr_size, should be int or tuple or None or "same"'
-            self.lr_size = lr_size
+            print('lr_size should be NoneType or "same!"')
+            raise ValueError
 
         # these param will be changed when saving func or datagen func is called.
         self.save_path = None
@@ -541,7 +538,7 @@ class Dataset(object):
 
         # image downsampling.
         hr_img, lr_img = downsample(
-            image, scale=self.scale, interp=self.downsample_mode, lr_size=self.lr_size)
+            image, scale=self.scale, interp=self.downsample_mode, downsample_flag=self.downsample_flag)
 
         # image slicing.
         if self.lr_size[0] == self.hr_size:
@@ -793,13 +790,13 @@ class Dataset(object):
 if __name__ == "__main__":
     dst = Dataset('../datasets/Car_train/Car_train/')
     dst.config_preprocess(num_img_max=4, lr_size='same')
-    dst._data_label_('n02960352_2638.JPEG')
+    # dst._data_label_('n02960352_2638.JPEG')
     dst.save_data_label(save_path='./test.h5')
-    # with h5py.File('./test.h5', 'r') as hf:
-    #     data, label = np.array(hf['data']), np.array(hf['label'])
-    # import matplotlib.pyplot as plt
-    # plt.subplot(121)
-    # plt.imshow(data[100].squeeze(), 'gray')
-    # plt.subplot(122)
-    # plt.imshow(label[100].squeeze(), 'gray')
-    # plt.show()
+    with h5py.File('./test.h5', 'r') as hf:
+        data, label = np.array(hf['data']), np.array(hf['label'])
+    import matplotlib.pyplot as plt
+    plt.subplot(121)
+    plt.imshow(data[100].squeeze(), 'gray')
+    plt.subplot(122)
+    plt.imshow(label[100].squeeze(), 'gray')
+    plt.show()
