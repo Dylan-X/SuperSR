@@ -518,6 +518,17 @@ class Dataset(object):
             self.scale = self.downsample['scale']
             self.lr_size = self.downsample['lr_size']
 
+            assert self.hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
+            if self.lr_size == 'same':
+                self.downsample_flag = 'same'
+                self.lr_size = (self.hr_size, self.hr_size)
+            elif self.lr_size == None:
+                self.downsample_flag = None
+                self.lr_size = (self.hr_size // self.scale, self.hr_size // self.scale)
+            else:
+                print('lr_size should be NoneType or "same!"')
+                raise ValueError
+
     def _data_label_(self, image_name):
         """
         Generate data and label of single picture. 
