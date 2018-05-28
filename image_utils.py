@@ -522,7 +522,7 @@ class Dataset(object):
             if self.lr_size[0] == self.hr_size:
                 self.downsample_flag = 'same'
             else:
-                self.downsample_flag = None
+                self.downsample_flag = None 
     def _data_label_(self, image_name):
         """
         Generate data and label of single picture. 

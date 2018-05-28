@@ -95,14 +95,14 @@ class BaseSRModel(object):
         """
         stride = test_dst.stride
         scale = test_dst.scale
-        lr_size = test_dst.lr_size
+        downsample_flag = test_dst.downsample_flag
         assert test_dst.slice_mode=='normal', 'Cannot be merged if blocks are not completed. '
 
         data, label, _, size_merge = test_dst._data_label_(image_name)
         output = self.model.predict(data, verbose=verbose)
         # merge all subimages. 
         hr_img = merge_to_whole(label, size_merge, stride = stride)
-        lr_img = downsample(hr_img, scale=scale, lr_size=lr_size)
+        lr_img = downsample(hr_img, scale=scale, downsample_flag=downsample_flag)
         sr_img = merge_to_whole(output, size_merge, stride = stride)
         if verbose == 1:
             print('PSNR is %f'%(psnr(sr_img, hr_img)))
