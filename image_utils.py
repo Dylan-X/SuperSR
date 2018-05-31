@@ -261,7 +261,8 @@ def _slice_rm_redundance(images, size=48, stride=24, scale=2, threshold=50):
         data = np.array(blocks)
         return N, (data), None
     elif len(images) == 2:
-        hr_patch = lr_patch = []
+        hr_patch = []
+        lr_patch = []
         hr_image, lr_image = images
         h, w = hr_image.shape[0:2]
         h_, w_ = lr_image.shape[0:2]
@@ -274,7 +275,7 @@ def _slice_rm_redundance(images, size=48, stride=24, scale=2, threshold=50):
             for y in range(0, w - size + 1, stride):
                 hr_subim = hr_image[x: x + size, y: y + size, :]
                 lr_subim = lr_image[x//scale : (x+size)//scale, y//scale : (y+size)//scale, :]
-                if len(blocks) == 0 or not _is_redundance(hr_subim, hr_patch, threshold):
+                if len(hr_patch) == 0 or not _is_redundance(hr_subim, hr_patch, threshold):
                     hr_patch.append(hr_subim)
                     lr_patch.append(lr_subim)
         N = len(hr_patch)
