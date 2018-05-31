@@ -105,7 +105,7 @@ class BaseSRModel(object):
         lr_img = downsample(hr_img, scale=scale, downsample_flag=downsample_flag)
         sr_img = merge_to_whole(output, size_merge, stride = stride)
         if verbose == 1:
-            print('PSNR is %f'%(psnr(sr_img, hr_img)))
+            print('PSNR is %f'%(psnr(sr_img/255., hr_img/255.)))
         if save:
             scipy.misc.imsave(sr_img, './example/%s_SR.png'%(image_name))
         return hr_img, lr_img, sr_img, psnr(sr_img/255., hr_img/255.)
