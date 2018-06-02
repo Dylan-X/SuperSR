@@ -283,22 +283,23 @@ class EDSR(BaseSRModel):
         x = Convolution2D(self.n, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv1')(x)
         if scale == 2:
             ps_features = self.channel*(scale**2)
-            x = Convolution2D(ps_features, (self.f, self.f), activation='relu', padding='same', name='sr_upsample_conv1')(x)
+            x = Convolution2D(ps_features, (self.f, self.f), activation='relu', padding='same', name='sr_upsample_conv2')(x)
             x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
         elif scale == 3:
             ps_features = self.channel*(scale**2)
-            x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv1')(x)
+            x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv2')(x)
             x = SubpixelConv2D(input_shape=self.input_size, scale=scale)(x)
         elif scale == 4:
             ps_features = self.channel*(2**2)
             for i in range(2):
-                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+1))(x)
-                x = SubpixelConv2D(input_shape=self.input_size, scale=2)(x)
+                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+2))(x)
+                x = SubpixelConv2D(input_shape=self.input_size, scale=2, id=i+1)(x)
         elif scale == 8:
+            # scale 4 by 2 times or scale 2 by 4 times? under estimate!
             ps_features = self.channel*(4**2)
             for i in range(2):
-                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+1))(x)
-                x = SubpixelConv2D(input_shape=self.input_size, scale=4)(x)
+                x = Convolution2D(ps_features, (self.f, self.f), activation='linear', padding='same', name='sr_upsample_conv%d'%(i+2))(x)
+                x = SubpixelConv2D(input_shape=self.input_size, scale=4, id=i+1)(x)
         return x
 
     def _residual_block(self, ip, id, scale):

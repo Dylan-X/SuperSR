@@ -36,7 +36,7 @@ copied from :
 https://github.com/twairball/keras-subpixel-conv
 """
 
-def SubpixelConv2D(input_shape, scale=4):
+def SubpixelConv2D(input_shape, scale=4, id=1):
     """
     Keras layer to do subpixel convolution.
     NOTE: Tensorflow backend only. Uses tf.depth_to_space
@@ -61,6 +61,6 @@ def SubpixelConv2D(input_shape, scale=4):
         return tf.depth_to_space(x, scale)
 
 
-    return Lambda(subpixel, output_shape=subpixel_shape, name='subpixel')
+    return Lambda(subpixel, output_shape=subpixel_shape, name='subpixel_layer%d'%(id))
 
 
