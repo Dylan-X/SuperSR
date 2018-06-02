@@ -10,21 +10,16 @@ A completion of data-preprocessing and models of SR(based on CNN) research.
 
     Try PyTables to save and generate data.
 
-<<<<<<< HEAD
-    **Finish the downsample first mode when generating data and label. **
+    ** Finish the downsample first mode when generating data and label. **
 
     Comments are incomplete, stucture is under enhanced.
 
-    Delete the slice first mode and set downsample first mode as Default.
+    ** Delete the slice first mode and set downsample first mode as Default. **
 
     Tensorboard visulization is incompleted. Weights visualization need to be considered. 
 
-=======
-    **Finish the downsample first mode when generating data and label.**
-
-    Comments are incomplete, stucture is under enhanced.
-
     Add texture extraction method in Dataset.
->>>>>>> 42871d02ba13d18514c04c85f48fea43115da7ad
 
     Add clustering algorithm in utils.py
+
+    try different upsample module in EDSR 8X model 
