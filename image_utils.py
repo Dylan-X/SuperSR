@@ -597,7 +597,7 @@ class Dataset(object):
                         sys.stdout.write('\r %d images have been written in h5 file, %d remained.' % (
                             count, self.num_image-count))
                 if count >= self.num_image:
-                    print('Finished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode' %
+                    print('\nFinished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode' %
                           (self.num_image, self.image_dir, self.save_path, num_dataInH5File))
                     break
 
