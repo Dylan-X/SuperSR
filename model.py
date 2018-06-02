@@ -266,8 +266,6 @@ class EDSR(BaseSRModel):
         out = Convolution2D(self.channel, (self.f, self.f), activation="linear", padding='same', name='sr_conv_final')(x)
 
         model = Model(init, out)
-        adam = optimizers.Adam(lr=1e-4)
-        model.compile(optimizer=adam, loss='mae', metrics=[PSNR])
 
         if load_weights: 
             model.load_weights(self.weight_path, by_name=True)
