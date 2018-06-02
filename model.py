@@ -128,7 +128,7 @@ class BaseSRModel(object):
                 PSNR.append(psnr)
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n'%(test_path, ave_psnr))
-        return ave_psnr
+        return ave_psnr, PSNR
 
 class SRCNN(BaseSRModel):
     """
