@@ -124,7 +124,7 @@ class BaseSRModel(object):
         for _, _, files in os.walk(test_path):
             for image_name in files:
                 # Read in image 
-                _, psnr =  self.gen_sr_img(test_dst, image_name)
+                _, psnr =  self.gen_sr_img(test_dst, image_name, verbose=verbose)
                 PSNR.append(psnr)
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n'%(test_path, ave_psnr))
@@ -162,7 +162,7 @@ class SRCNN(BaseSRModel):
 
         if load_weights: 
             model.load_weights(self.weight_path)
-            print("loaded model%s"%(self.model_name))
+            print("loaded model %s"%(self.model_name))
 
         self.model = model
         return model
@@ -201,7 +201,9 @@ class ResNetSR(BaseSRModel):
         x = Convolution2D(self.channel, (self.f, self.f), activation="linear", padding='same', name='sr_res_conv_final')(x)
 
         model = Model(init, x)
-        if load_weights: model.load_weights(self.weight_path, by_name=True)
+        if load_weights: 
+            model.load_weights(self.weight_path, by_name=True)
+            print("loaded model %s"%(self.model_name))
 
         self.model = model
         return model
@@ -269,7 +271,7 @@ class EDSR(BaseSRModel):
 
         if load_weights: 
             model.load_weights(self.weight_path, by_name=True)
-            print("loading model", self.weight_path)
+            print("loaded model %s"%(self.model_name))
 
         self.model = model
         return model
