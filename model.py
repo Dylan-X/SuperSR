@@ -108,7 +108,7 @@ class BaseSRModel(object):
             print('PSNR is %f'%(psnr(sr_img/255., hr_img/255.)))
         if save:
             scipy.misc.imsave(sr_img, './example/%s_SR.png'%(image_name))
-        return hr_img, lr_img, sr_img, psnr(sr_img/255., hr_img/255.)
+        return (hr_img, lr_img, sr_img), psnr(sr_img/255., hr_img/255.)
 
     def evaluate(self, test_dst=Dataset('./test_image/'), verbose = 0) -> Model:
         """
@@ -124,7 +124,7 @@ class BaseSRModel(object):
         for _, _, files in os.walk(test_path):
             for image_name in files:
                 # Read in image 
-                _, _, _, psnr =  self.gen_sr_img(test_dst, image_name)
+                _, psnr =  self.gen_sr_img(test_dst, image_name)
                 PSNR.append(psnr)
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n'%(test_path, ave_psnr))
