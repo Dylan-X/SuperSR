@@ -107,7 +107,7 @@ class BaseSRModel(object):
         if verbose == 1:
             print('PSNR is %f'%(psnr(sr_img/255., hr_img/255.)))
         if save:
-            scipy.misc.imsave(sr_img, './example/%s_SR.png'%(image_name))
+            scipy.misc.imsave('./example/%s_SR.png'%(image_name), sr_img)
         return (hr_img, lr_img, sr_img), psnr(sr_img/255., hr_img/255.)
 
     def evaluate(self, test_dst=Dataset('./test_image/'), verbose = 0) -> Model:
