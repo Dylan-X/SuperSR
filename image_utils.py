@@ -4,11 +4,71 @@ import shutil
 import sys
 from ast import \
     literal_eval  # used to transform str to dic, because dic cannot be saved in h5file.
-
+from PIL import Image
 import h5py
 import numpy as np
 from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
+
+"""
+Image rotation, center_crop, transpose
+"""
+
+def rotation(image, angle):
+    """
+    Input:
+        image, numpy array
+        angle, In degrees counter clockwise.
+    Return:
+        new_image, numpy array
+    """
+    	
+    img = Image.fromarray(np.uint8(image))
+    new_img = np.array(img.rotate(angle))
+    return new_img
+
+
+def center_crop(image, center=None, size=0.5):
+    """
+    Input:
+        image: numpy array
+        center: tuple of center to crop
+        size: tuple of size to crop, or float from 0 to 1, which means the scale to crop
+    Return:
+        new_image, numpy array
+    """
+    h, w = image.shape[:2]
+    if center is None:
+        cp_center = (h/2., w/2.)
+    else:
+        cp_center = center
+    if isinstance(size, 'int'):
+        cp_size = (h*size, w*size)
+    elif isinstance(size, tuple):
+        cp_size = size
+    else:
+        raise ValueError('Wrong size, should be tuple or float from 0 to 1')
+    img = Image.fromarray(np.uint8(image))
+    box = (cp_center[1]-cp_size[1]//2, cp_center[0]-cp_size[0]//2, cp_center[1]+cp_size[1]//2, cp_center[0]+cp_size[0]//2)
+    new_img = np.array(img.crop(box))
+    return new_img
+
+
+def flip(image, axis=0):
+    """
+    Input:
+        image, numpy array
+        axis, int
+    Return:
+        new_image, numpy array
+    """
+    img = Image.fromarray(image)
+    if axis == 0:
+        new_img = img.transpose(Image.FLIP_LEFT_RIGHT)
+    elif axis == 1:
+        new_img = img.transpose(Image.FLIP_TOP_BOTTOM)
+        
+    return np.array(new_img)
 
 
 """
