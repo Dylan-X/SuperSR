@@ -886,7 +886,7 @@ class Dataset(object):
         assert self._is_saved(), 'Data hasn\'t been saved!'
         if os.path.isdir(self.save_path):
             with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
-                N = literal_eval(f.read())['num_subimages']
+                num_data = literal_eval(f.read())['num_subimages']
         elif os.path.isfile(self.save_path):
             with h5py.File(self.save_path, 'r') as hf:
                 num_data = int(hf['num_subimages'].value)
