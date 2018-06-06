@@ -8,6 +8,7 @@ from ast import \
 import h5py
 import numpy as np
 from scipy.misc import imread, imresize, imsave
+import matplotlib.pyplot as plt
 
 
 """
@@ -45,7 +46,7 @@ def is_patch(data):
 
 def formulate(data):
     """
-    pass
+    return data in shape of 4 dimensions
     """
     shape = data.shape
     if len(shape) == 4:
@@ -654,9 +655,9 @@ class Dataset(object):
             # print(data.shape, label.shape)
             # add subimages of this image into h5 file.
             for i, lr_img in enumerate(data):
-                imsave(os.path.join(self.save_path, 'lrImage/%s_%d.jpg'%(filename, i)), lr_img.squeeze())
+                imsave(os.path.join(self.save_path, 'lrImage/%d.jpg'%(num_images+i)), lr_img.squeeze())
             for i, hr_img in enumerate(label):
-                imsave(os.path.join(self.save_path, 'hrImage/%s_%d.jpg'%(filename, i)), hr_img.squeeze())
+                imsave(os.path.join(self.save_path, 'hrImage/%d.jpg'%(num_images+i)), hr_img.squeeze())
             num_images += N
 
             if verbose == 1:
@@ -707,6 +708,7 @@ class Dataset(object):
 
             return self._save_H5(verbose=verbose)
         elif self.save_mode == 'dir':
+            os.mkdir(self.save_path)
             assert os.path.isdir(
                 self.save_path), 'Save path should be a dirctory!'
 
@@ -721,11 +723,12 @@ class Dataset(object):
                 h5 file is slow, so we crush a big batch of data into memory and read 
                 patch from numpy array.
                 Value of big_batch_size shouldn't be too large in case of memory outrage or 
-                too small in case of read from h5 file frequently. 
+                too small in case of reading from h5 file frequently. 
 
         """
         assert os.path.exists(
             self.save_path), 'Please save the data and label to %s' % (self.save_path)
+
 
         if self.shuffle:
             if big_batch_size != None:
@@ -788,7 +791,51 @@ class Dataset(object):
                         yield (batch_x, batch_y)
 
     def _image_flow_from_dir(self, big_batch_size=1000):
-        raise NotImplementedError
+        assert os.path.exists(
+            self.save_path), 'Please save the data and label to %s' % (self.save_path)
+
+        if self.shuffle:
+            if big_batch_size != None:
+                while True:
+                    with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
+                        N = literal_eval(f.read())['num_subimages']
+                    index_generator = self._index_generator(big_batch_size)
+                    for i in range(0, N, big_batch_size):
+                        if i+big_batch_size >= N:
+                            break 
+                        data = []
+                        label = []
+                        for j in range(big_batch_size):
+                            data.append(imread(os.path.join(self.save_path, 'lrImage/%d.jpg'%(i+j))))
+                            label.append(imread(os.path.join(self.save_path, 'hrImage/%d.jpg'%(i+j))))
+                        for _ in range(big_batch_size//self.batch_size):
+                            index_array, _, current_batch_size = next(
+                                index_generator)
+                            batch_x = np.zeros(
+                                (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
+                            batch_y = np.zeros(
+                                (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
+                            for k, index in enumerate(index_array):
+                                batch_x[k] = data[index]
+                                batch_y[k] = label[index]
+                            yield (batch_x, batch_y)
+            else:
+                while True:
+                    with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
+                        N = literal_eval(f.read())['num_subimages']
+                    index_generator = self._index_generator(N)
+                    index_array, _, current_batch_size = next(
+                        index_generator)
+                    batch_x = np.zeros(
+                        (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
+                    batch_y = np.zeros(
+                        (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
+                    for k, index in enumerate(index_array):
+                        batch_x[k] = formulate(imread(os.path.join(self.save_path, 'lrImage/%d.jpg'%(index))))[0]
+                        batch_y[k] = formulate(imread(os.path.join(self.save_path, 'hrImage/%d.jpg'%(index))))[0]
+                    yield (batch_x, batch_y)
+        else:
+            raise NotImplementedError
 
     def image_flow(self, big_batch_size=1000, batch_size=16, shuffle=True):
         """
@@ -838,7 +885,8 @@ class Dataset(object):
     def get_num_data(self):
         assert self._is_saved(), 'Data hasn\'t been saved!'
         if os.path.isdir(self.save_path):
-            raise NotImplementedError
+            with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
+                N = literal_eval(f.read())['num_subimages']
         elif os.path.isfile(self.save_path):
             with h5py.File(self.save_path, 'r') as hf:
                 num_data = int(hf['num_subimages'].value)
@@ -860,20 +908,20 @@ class Dataset(object):
 
 
 if __name__ == "__main__":
-    dst = Dataset('../datasets/Car_train/Car_train/')
-    dst.config_preprocess(num_img_max=4, lr_size='same')
-    # dst._data_label_('n02960352_2638.JPEG')
-    dst.save_data_label(save_path='./test1.h5')
-    with h5py.File('./test1.h5', 'r') as hf:
-        data, label = np.array(hf['data']), np.array(hf['label'])
-    import matplotlib.pyplot as plt
-    from utils import psnr
-    lr_sample = data[100].squeeze()
-    hr_sample = label[100].squeeze()
-    # lr_sample = imresize(lr_sample, hr_sample.shape[:2], interp='bicubic')/255.
-    print(psnr(lr_sample, hr_sample))
-    plt.subplot(121)
-    plt.imshow(lr_sample, 'gray')
-    plt.subplot(122)
-    plt.imshow(hr_sample, 'gray')
-    plt.show()
+    image_dir = './test_image/'
+    dst = Dataset(image_dir)
+    dst.config_preprocess(num_img_max=10, color_mode="RGB", 
+                      hr_size=40, stride = 20, scale=2, lr_size=None)
+    dst.save_data_label(save_mode='dir', save_path='./test_sub_images/', )
+    datagen = dst.image_flow(big_batch_size=None, batch_size=20)
+    while True:
+        if input() == 'n':
+            data, label = next(datagen)
+            print(data.shape, label.shape)
+            plt.subplot(121)
+            plt.imshow(np.uint8(data[0]))
+            plt.subplot(122)
+            plt.imshow(np.uint8(label[0]))
+            plt.show()
+        else:
+            break
