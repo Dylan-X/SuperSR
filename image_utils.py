@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 Image rotation, center_crop, transpose
 """
 
-def rotation(image, angle):
+def rotate(image, angle):
     """
     Input:
         image, numpy array
@@ -42,7 +42,7 @@ def center_crop(image, center=None, size=0.5):
         cp_center = (h/2., w/2.)
     else:
         cp_center = center
-    if isinstance(size, 'int'):
+    if isinstance(size, int):
         cp_size = (h*size, w*size)
     elif isinstance(size, tuple):
         cp_size = size
@@ -67,7 +67,7 @@ def flip(image, axis=0):
         new_img = img.transpose(Image.FLIP_LEFT_RIGHT)
     elif axis == 1:
         new_img = img.transpose(Image.FLIP_TOP_BOTTOM)
-        
+
     return np.array(new_img)
 
 
