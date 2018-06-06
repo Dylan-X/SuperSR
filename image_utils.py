@@ -497,7 +497,33 @@ class Dataset(object):
         Unpack configuration param from saved h5file or directory. 
         """
         if os.path.isdir(self.save_path):
-            raise NotImplementedError
+            with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
+                config_info = literal_eval(f.read())
+                self.image = literal_eval(config_info['image'])
+                self.slice = literal_eval(config_info['slice'])
+                self.downsample = literal_eval(config_info['downsample'])
+            
+            self.num_img_max = self.image['num_image']
+            self.image_color_mode = self.image['color_mode']
+            self.channel = self.image['channel']
+
+            self.slice_mode = self.slice['slice_mode']
+            self.hr_size = self.slice['hr_size']
+            self.stride = self.slice['stride']
+            self.num = self.slice['num_blocks']
+            self.threshold = self.slice['threshold']
+            self.seed = self.slice['seed']
+
+            self.downsample_mode = self.downsample['downsample_mode']
+            self.scale = self.downsample['scale']
+            self.lr_size = self.downsample['lr_size']
+
+            assert self.hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
+            if self.lr_size[0] == self.hr_size:
+                self.downsample_flag = 'same'
+            else:
+                self.downsample_flag = None 
+
         elif os.path.isfile(self.save_path):
             with h5py.File(self.save_path, 'r') as hf:
                 self.image = literal_eval(hf['image'].value)
@@ -524,6 +550,7 @@ class Dataset(object):
                 self.downsample_flag = 'same'
             else:
                 self.downsample_flag = None 
+
     def _data_label_(self, image_name):
         """
         Generate data and label of single picture. 
@@ -608,7 +635,45 @@ class Dataset(object):
             hf.create_dataset('downsample', data=str(self.downsample))
 
     def _save_dir(self, verbose=1):
-        raise NotImplementedError
+        """
+        Save the data and label of a dataset dirctory into directory. 
+        Under enhancing !! Not scalable yet...
+        """
+
+        num_images = 0
+        count = 0
+
+        os.mkdir(os.path.join(self.save_path, 'lrImage'))
+        os.mkdir(os.path.join(self.save_path, 'hrImage'))
+
+        # read images in diretory and preprocess them.
+        for filename in sorted(os.listdir(self.image_dir)):
+            count += 1
+            # generate subimages of data and label to save.
+            data, label, N, _ = self._data_label_(filename)
+            # print(data.shape, label.shape)
+            # add subimages of this image into h5 file.
+            for i, lr_img in enumerate(data):
+                imsave(os.path.join(self.save_path, 'lrImage/%s_%d.jpg'%(filename, i)), lr_img.squeeze())
+            for i, hr_img in enumerate(label):
+                imsave(os.path.join(self.save_path, 'hrImage/%s_%d.jpg'%(filename, i)), hr_img.squeeze())
+            num_images += N
+
+            if verbose == 1:
+                if count % 10 == 0:
+                    sys.stdout.write('\r %d images have been written in h5 file, %d remained.' % (
+                        count, self.num_image-count))
+            if count >= self.num_image:
+                print('\nFinished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode' %
+                        (self.num_image, self.image_dir, self.save_path, num_images))
+                break
+        config_info = {}
+        config_info['num_subimages'] = num_images
+        config_info['image'] = str(self.image)
+        config_info['slice'] = str(self.slice)
+        config_info['downsample'] = str(self.downsample)
+        with open(os.path.join(self.save_path, 'config.txt'), 'w') as f:
+            f.write(str(config_info))
 
     def save_data_label(self, save_mode='h5', save_path=None, verbose=1):
         """
