@@ -2,8 +2,9 @@
 # You can import this package directly.
 if __name__ == "__main__":
     import sys  
-    if not "./" in sys.path:  
-        sys.path.append("./")   
+    import os
+    if not os.getcwd() in sys.path:  
+        sys.path.append(os.getcwd())   
     if not 'SuperSR' in sys.modules:
         a = __import__('SuperSR')  
     else:  
