@@ -1,6 +1,23 @@
 # SuperSR
 
-A completion of data-preprocessing and models of SR(based on CNN) research.
+A completion of data-preprocessing and models of SR(super-resolution based on CNN) research.
+
+## Image_utils
+
+- Image downsampling, supports batch operation.
+- Image slicing, supports random, normal and remove_redundance modes. Remove redundance.
+- Merge image from blocks, supports multichannels.
+- Image preprocessing in downsample first(not work yet..) and slicing first(works fine) mode.
+- Image generator, one image a time, supports customize processing function.
+- Save to h5 file, supports big data.
+- Data flow from h5 file, supports big data.
+
+## Models
+
+- Base model class, the base class of all models, with train and evaluation func.
+- SRCNN model
+- Residual-Network, supports sub-pixel upscaling.
+- EDSR, using sub-pixel upsaling instead of deconv layer, and using mae instead of mse to evaluate loss.
 
 ## To Do List
 
@@ -18,3 +35,5 @@ A completion of data-preprocessing and models of SR(based on CNN) research.
 - [ ]    Add feature extraction in image_utils.py
 - [ ]    Fix Comments in image_utils.py
 - [ ]    Test if the models work on this version.
+- [ ]    Finish saving image into directory.
+- [ ]    Finish image flow from directory.
