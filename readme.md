@@ -5,7 +5,7 @@ A completion of data-preprocessing and models of SR(super-resolution based on CN
 ## Image_utils
 
 - Image downsampling, supports batch operation.
-- Image slicing, supports random, normal and remove_redundance modes. Remove redundance.
+- Image slicing, supports random, normal and remove_redundance modes.
 - Merge image from blocks, supports multichannels.
 - Image preprocessing in downsample first(not work yet..) and slicing first(works fine) mode.
 - Image generator, one image a time, supports customize processing function.
