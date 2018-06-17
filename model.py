@@ -12,7 +12,7 @@ from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from utils import PSNR, psnr, SubpixelConv2D
 from PIL import Image
-from image_utils_copy import *
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal
 import numpy as np
 import os
 import warnings
