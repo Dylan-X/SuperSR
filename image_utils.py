@@ -7,418 +7,365 @@ from ast import \
 from PIL import Image
 import h5py
 import numpy as np
-from scipy.misc import imread, imresize, imsave
+# from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
 
-"""
-Image rotation, center_crop, transpose
-"""
-
-def rotate(image, angle):
-    """
-    Input:
-        image, numpy array
-        angle, In degrees counter clockwise.
-    Return:
-        new_image, numpy array
-    """
-    	
-    img = Image.fromarray(np.uint8(image))
-    new_img = np.array(img.rotate(angle))
-    return new_img
+MODE = {"BICUBIC": Image.BICUBIC,
+        "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
 
 
-def center_crop(image, center=None, size=0.5):
-    """
-    Input:
-        image: numpy array
-        center: tuple of center to crop
-        size: tuple of size to crop, or float from 0 to 1, which means the scale to crop
-    Return:
-        new_image, numpy array
-    """
-    h, w = image.shape[:2]
-    if center is None:
-        cp_center = (h/2., w/2.)
-    else:
-        cp_center = center
-    if isinstance(size, int):
-        cp_size = (h*size, w*size)
-    elif isinstance(size, tuple):
-        cp_size = size
-    else:
-        raise ValueError('Wrong size, should be tuple or float from 0 to 1')
-    img = Image.fromarray(np.uint8(image))
-    box = (cp_center[1]-cp_size[1]//2, cp_center[0]-cp_size[0]//2, cp_center[1]+cp_size[1]//2, cp_center[0]+cp_size[0]//2)
-    new_img = np.array(img.crop(box))
-    return new_img
+############################################
+# downsample, block_extraction, block_merging.
+############################################
 
+# TODO(mulns): feature-extraction, clustering, sparce-coding (2018.6.16)
 
-def flip(image, axis=0):
-    """
-    Input:
-        image, numpy array
-        axis, int
-    Return:
-        new_image, numpy array
+def color_mode_transfer(image, mode):
+    """Transform the color mode of image
+
+        Mode of an image defines the type and depth of a pixel in the image. PIL supports the following standard modes:
+
+            1 (1-bit pixels, black and white, stored with one pixel per byte)
+            L (8-bit pixels, black and white)
+            P (8-bit pixels, mapped to any other mode using a color palette)
+            RGB (3x8-bit pixels, true color)
+            RGBA (4x8-bit pixels, true color with transparency mask)
+            CMYK (4x8-bit pixels, color separation)
+            YCbCr (3x8-bit pixels, color video format)
+            Note that this refers to the JPEG, and not the ITU-R BT.2020, standard
+            LAB (3x8-bit pixels, the L*a*b color space)
+            HSV (3x8-bit pixels, Hue, Saturation, Value color space)
+            I (32-bit signed integer pixels)
+            F (32-bit floating point pixels)
+
+        Args:
+            image: Image in numpy array.
+            mode: String, one of the modes listed above.
+
+        Returns:
+            Image been transfered in numpy array.
     """
     img = Image.fromarray(image)
-    if axis == 0:
-        new_img = img.transpose(Image.FLIP_LEFT_RIGHT)
-    elif axis == 1:
-        new_img = img.transpose(Image.FLIP_TOP_BOTTOM)
-
-    return np.array(new_img)
-
-
-"""
-Image downsampling. Support multi-images(same size) processing. 
-"""
-
-
-def is_gray(image):
-    assert len(image.shape) in (
-        2, 3), 'image shape error, should be 2 or 3 dimensions!'
-    image = np.squeeze(image)
-    if len(image.shape) == 3:
-        return False
-    return True
-
-
-def is_patch(data):
-    """
-    pass
-    """
-    shape = data.shape
-    if len(shape) == 4:
-        return True
-    elif len(shape) == 2:
-        return False
-    elif len(shape) == 3 and shape[-1] in (1, 3, 4):
-        return False
-    elif len(shape) == 3:
-        return True
-    else:
-        print(
-            'Data shape incorrect. should be ([N,], hight, width [,channel])')
-        raise ValueError
-
-
-def formulate(data):
-    """
-    return data in shape of 4 dimensions
-    """
-    shape = data.shape
-    if len(shape) == 4:
-        return data
-    elif len(shape) == 2:
-        return data.reshape((1, shape[0], shape[1], 1))
-    elif len(shape) == 3 and shape[-1] in (1, 3, 4):
-        return data.reshape((1, shape[0], shape[1], shape[2]))
-    elif len(shape) == 3:
-        return data.reshape((shape[0], shape[1], shape[2], 1))
-    else:
-        print(
-            'Data shape incorrect. should be ([N,], hight, width [,channel])')
-        raise ValueError
+    img_new = img.new(mode)
+    return np.array(img_new)
 
 
 def modcrop(image, scale):
+    """Crop the image to size which can be devided by scale.
+
+        Modify the size of image to be devided be scale.
+
+        Args:
+            image: Numpy array or Image object.
+            scale: Scale to be modified. For example : if image have shape of 10*10, scale is 3, then return a image in shape of 9*9, in which 9 is dividable by 3.
+
+        Returns:
+            Image in numpy array which has been modified.
+
+        Raises:
+            ValueError: An error occured when image is not in 2-D or 3-D.
     """
-    Return the image which could be devided by scale.
-    Edge of image would be discard.
-    If image is grayscale, return 2-D numpy array.  
-    If image is a patch of images with same size, return the patch of modified images. 
-    Input:
-        image : ndarray, 2 or 3 or 4-D numpy arr. 
-        scale : int, scale to be divided. 
-    Return:
-        image : ndarray, modified image or images. 
-        is_patch : whether the input is a patch of images.
-    ***
-    If input image or images is grayscale, channel dimension will be ignored. Return np arr with shape of (N, size, size)
-    """
-    image = np.squeeze(image)
-    if not is_patch(image):
-        size = image.shape[:2]
-        size -= np.mod(size, scale)
-        if not is_gray(image):
-            image = image[:size[0], :size[1], :]
-        else:
-            image = image[:size[0], :size[1]]
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+    image = image.squeeze()
+    size = image.shape[:2]
+    size -= np.mod(size, scale)
+    if len(image.shape) == 2:
+        image2 = image[:size[0], :size[1]]
+    elif len(image.shape) == 3:
+        image2 = image[:size[0], :size[1], :]
     else:
-        size = image.shape[1:3]
-        size -= np.mod(size, scale)
-        if len(image.shape) == 4:
-            image = image[:, :size[0], :size[1], :]
-        else:
-            image = image[:, :size[0], :size[1]]
+        raise ValueError("Input image should be a 2-D or 3-D array!")
 
-    return image, is_patch(image)
+    return image2
 
 
-def downsample(image, scale, interp='bicubic', downsample_flag=None):
+def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=False):
+    """resample image to specified size
+
+        Resample the given image to specified size, using interplotion, could be "BICUBIC", "NEAREST" and "BILINEAR". 
+
+        Args:
+            image: Numpy array or Image object.
+            scale: Number of scaling factor, in INT.
+            shape: Optional. Size to be resampled to. 
+                   If 0, keep size of the lr_size. 
+                   If 1, keep size of the hr_size. 
+                   If tuple, size to be resize to. 
+            interp: Mode of interplotion, could be string of "BICUBIC", "NEAREST" and "BILINEAR". We use "BICUBIC" by default.
+            keepdim: Whether set the channel of gray image as 1.
+            return_both: Whether return both of hr_img and lr_img.
+
+        Returns:
+            Image in numpy array.
+
+        Raises:
+            ValueError: An error occured when shape is not a tuple or 0 or 1.
     """
-    Down sample the image to 1/scale**2.
-    Input: 
-        image : numpy array with shape of ([N, ] size, size [, channel])  
-        scale : int
-            Scale to downsample.
-        interp : str, optional
-            Interpolation to use for re-sizing ('nearest', 'lanczos', 'bilinear',
-            'bicubic' or 'cubic').
-        lr_size : tuple or int or NoneType, the output size of lr_image. None if keep size after scaling. 
-    Return:
-        Image_hr which has been modcropped. 
-        Image_lr with shape of 1/scale, which has been squeezed. (i.e. No dimension with length of 1)
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+    image = modcrop(image, scale)
+    hr_size = list(image.shape[:2])
+    lr_size = [int(x/scale) for x in hr_size]
 
-    """
-    image, is_patch_ = modcrop(image, scale)
+    img = Image.fromarray(image)
+    img1 = img.resize(lr_size, resample=MODE[interp])
 
-    if is_patch_:
-        assert len(image.shape) in (
-            3, 4), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 3 or 4-D!'
-
-        data = []
-        label = []
-        for _, img in enumerate(image):
-            img_lr = imresize(img, 1/scale, interp=interp)
-            if downsample_flag is not None:
-                img_lr = imresize(img_lr, img.shape[:2], interp='bicubic')
-            data.append(img_lr)
-            label.append(img)
-        return np.array(label), np.array(data)
+    if isinstance(shape, tuple):
+        img2 = img1.resize(shape, resample=MODE[interp])
+    elif shape == 1:
+        img2 = img1.resize(hr_size, resample=MODE[interp])
+    elif not shape:
+        img2 = img1
     else:
-        assert len(image.shape) in (
-            2, 3), 'modcrop output Wrong shape. If processing a patch of images, the shape of arr should be 2 or 3-D!'
+        raise ValueError("Shape should be tuple or 0 or 1!")
 
-        image_lr = imresize(image, 1/scale, interp=interp)
-        if downsample_flag is not None:
-            image_lr = imresize(image_lr, image.shape[:2], interp='bicubic')
-        return image, image_lr
-
-
-"""
-Image slicing in diff mode. Support single image or a pair of images processing. 
-"""
+    img2 = np.array(img2)
+    if keepdim and len(img2.shape) == 2:
+        img2 =  img2[:, :, np.newaxis]
+    if return_both:
+        return np.array(image), img2
+    return img2
 
 
-def _slice(images, size=48, stride=24, scale=2):
+def modcrop_batch(batch, scale):
+    """Do modcrop on a whole batch of images.
+
+        Do modcrop on a batch of images. Image in batch could be in different size. But they share the same scale factor. See modcrop() for more details.
+
+        Args:
+            batch: A batch of images. Could be in a numpy array or a list of numpy arrays. If it's in numpy array, the first dimension should define the number of images.
+            scale: Scale to be modified. For example : if image have shape of 10*10, scale is 3, then return a image in shape of 9*9, in which 9 is dividable by 3.
+
+        Returns:
+            List of images in numpy array.
     """
-    Slice the image into blocks with stride of stride, which could be reconstructed.
-    Input:
-        images : list, with one or two ndarray, 2-D or 3-D numpy array, could be in different size. 
-                If list has two image, should be in (hr-image, lr-image) order.  
-        size : int, size of block of first image in images. 
-        stride : int, stride of slicing of hr-image in images.
-        scale : int, scale of lr-image(if exists)
-    Return:
-        N : int, number of blocks.
-        datas : list, with one or two ndarray, 
-                numpy array with shape of (N, size, size, channel), and channel will be 1 if image is in grayscale.
-                If list has two patch of subimages, it will be in (hr-patch, lr-patch) order. 
-        (nx, ny) : tuple of two integers, used to merge original image.
+    return list(map(modcrop, list(batch), [scale for _ in range(len(batch))]))
+
+
+def hr2lr_batch(batch, scale, shape=0, interp="BICUBIC", keepdim=False):
+    """resample image to specified size
+
+        Do hr2lr() on batch of images. Image in batch could be in different size, but they share the same scale factor, interplotion method and final shape. (If shape is 0, the return list of images still could be in different shape.)
+
+        Args:
+            batch: A batch of images. Could be in a numpy array or a list of numpy arrays or Image objects. If it's in numpy array, the first dimension should define the number of images.
+            scale: Number of scaling factor, in INT.
+            shape: Optional. Size to be resampled to.
+                   If 0, keep size of the lr_size.
+                   If 1, keep size of the hr_size.
+                   If tuple, size to be resize to.
+            interp: Mode of interplotion, could be string of "BICUBIC", "NEAREST" and "BILINEAR". We use "BICUBIC" by default.
+
+        Returns:
+            List of images in numpy array.
+        Raises:
+            ValueError: An error occured when shape is not a tuple or 0 or 1.
     """
+    return list(map(lambda img: hr2lr(img, scale, shape, interp, keepdim), list(batch)))
 
-    if len(images) == 1:
-        image = images[0]
-        blocks = []
-        nx = ny = 0
-        h, w = image.shape[0:2]
-        if is_gray(image):
-            image = image.reshape((h, w, 1))
+# TODO(mulns): image slicing, merging, saving, image flow, and other high-level API. (2018.6.15)
 
-        for x in range(0, h - size + 1, stride):
-            nx += 1
-            ny = 0
-            for y in range(0, w - size + 1, stride):
-                ny += 1
-                subim = image[x: x + size, y: y + size, :]
-                blocks.append(subim)
-        N = len(blocks)
-        data = np.array(blocks)
-        return N, (data), (nx, ny)
 
-    elif len(images) == 2:
-        hr_patch = []
-        lr_patch = []
-        nx = 0
+def slice_normal(image, size, stride, to_array=False, merge=False, **kargs):
+    """Slice a image to bunch of blocks.
+
+        Using slicing to cut image into bunch of blocks in same shape. Blocks can overlap each other determined by stride. 
+
+        Args:
+            image: Numpy array or Image object.
+            size: Int defines height and width of blocks.
+            stride: Stride defines the length of step once a time. #FIXME bad discription
+            to_array: Set true if you want to return a numpy array instead of a list.
+            merge: Whether merge to whole image or not.
+
+        Returns:
+            List of blocks. Or a numpy array if to_array is true.
+            Tuple of nx and ny, which are used to merge blocks into whole image.
+
+        Raises:
+            IOError: An error occured when Discription #FIXME
+    """
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+    blocks = []
+    nx = ny = 0
+    h, w = image.shape[0:2]
+    if len(image.shape) == 2:
+        image = image.reshape((h, w, 1))
+
+    # slicing
+    for x in range(0, h-size+1, stride):
+        nx += 1
         ny = 0
-        hr_image, lr_image = images
-        h, w = hr_image.shape[0:2]
-        h_, w_ = lr_image.shape[0:2]
-        if is_gray(hr_image):
-            hr_image = hr_image.reshape((h, w, 1))
-            lr_image = lr_image.reshape((h_, w_, 1))
-
-        for x in range(0, h - size + 1, stride):
-            nx += 1
-            ny = 0
-            for y in range(0, w - size + 1, stride):
-                ny += 1
-                hr_subim = hr_image[x: x + size, y: y + size, :]
-                lr_subim = lr_image[x//scale : (x+size)//scale, y//scale : (y+size)//scale, :]
-                hr_patch.append(hr_subim)
-                lr_patch.append(lr_subim)
-
-        N = len(hr_patch)
-        label = np.array(hr_patch)
-        data = np.array(lr_patch)
-        return N, (label, data), (nx, ny)
-    else:
-        print('Wrong size of images, length of which should be 1 or 2!')
-        raise ValueError
+        for y in range(0, w-size+1, stride):
+            ny += 1
+            block = image[x:x+size, y:y+size, :]
+            blocks.append(block)
+    # list or array
+    if to_array:
+        blocks = np.array(blocks)
+    if merge:
+        return blocks, (nx, ny)
+    return blocks
 
 
-def _is_redundance(subim, blocks, Threshold):
+def slice_random(image, size, stride, nb_blocks, seed=None, to_array=False, **kargs):
+    """Slice a image into blocks randomly.
+
+        Using slice_normal() to slice the image into blocks and choose a sublist of blocks randomly.
+
+        Args:
+            image: Numpy array or Image object.
+            size: Tuple(Int) defines height and width of blocks.
+            stride: Stride defines the length of step once a time. #FIXME bad discription
+            nb_blocks: number of blocks you want to select.
+            seed: seed of numpy.random
+            to_array: Set true if you want to return a numpy array instead of a list.
+
+        Returns:
+            List of blocks. Or a numpy array if to_array is true.
+            NoneType.
+
+        Raises:
+            IOError: An error occured when Discription #FIXME
     """
-    Use MSE to decide if the subim is redundance to blocks.
-    With little MSE, comes to great similarity, which means
-    there has been images similar to this one. 
-    Input:
-        subim : numpy array.
-        blocks : list of numpy arr or a numpy arr.
-        Threshold : int. Higher threshold means more likely to be redundance. 
-    Return : 
-        Bool.
-    """
-    mses = np.mean(np.square(np.array(blocks) - subim), axis=(1, 2))
-    if np.sum(mses < Threshold) == 0:
-        return False
-    return True
-
-
-def _slice_rm_redundance(images, size=48, stride=24, scale=2, threshold=50):
-    """
-    Slice the image into blocks with removing redundance, which cannot be reconstructed.
-    Input:
-        images : list, with one or two ndarray, 2-D or 3-D numpy array, could be in different size. 
-                If list has two image, should be in (hr-image, lr-image) order. 
-        size : int, size of block of hr-image
-        stride : int, stride of slicing of hr-image
-        threshold : int, threshold to decide the similarity of blocks, higher threshold value means
-            more likely to be removed. 
-        scale : scale of lr-image from hr-image
-    Return:
-        N : int, number of blocks.
-        datas : list, with one or two ndarray, 
-                numpy array with shape of (N, size, size, channel), and channel will be 1 if image is in grayscale.
-                If list has two patch of subimages, it will be in (hr-patch, lr-patch) order.   
-        NoneType. 
-    """
-    if len(images) == 1:
-        image = images[0]
-        blocks = []
-        h, w = image.shape[0:2]
-        if is_gray(image):
-            image = image.reshape((h, w, 1))
-
-        for x in range(0, h - size + 1, stride):
-            for y in range(0, w - size + 1, stride):
-                subim = image[x: x + size, y: y + size, :]
-                if len(blocks) == 0 or not _is_redundance(subim, blocks, threshold):
-                    blocks.append(subim)
-        N = len(blocks)
-        data = np.array(blocks)
-        return N, (data), None
-    elif len(images) == 2:
-        hr_patch = []
-        lr_patch = []
-        hr_image, lr_image = images
-        h, w = hr_image.shape[0:2]
-        h_, w_ = lr_image.shape[0:2]
-
-        if is_gray(hr_image):
-            hr_image = hr_image.reshape((h, w, 1))
-            lr_image = lr_image.reshape((h_, w_, 1))
-
-        for x in range(0, h - size + 1, stride):
-            for y in range(0, w - size + 1, stride):
-                hr_subim = hr_image[x: x + size, y: y + size, :]
-                lr_subim = lr_image[x//scale : (x+size)//scale, y//scale : (y+size)//scale, :]
-                if len(hr_patch) == 0 or not _is_redundance(hr_subim, hr_patch, threshold):
-                    hr_patch.append(hr_subim)
-                    lr_patch.append(lr_subim)
-        N = len(hr_patch)
-        label = np.array(hr_patch)
-        data = np.array(lr_patch)
-        return N, (label, data), None
-    else:
-        print('Wrong size of images, length of which should be 1 or 2!')
-        raise ValueError
-
-
-def _slice_random(images, size, stride, scale, num, seed=None):
-    """
-    Slicing the image randomly. 
-    Input:
-        images : list, with one or two ndarray, 2-D or 3-D numpy array, could be in different size. 
-                If list has two image, should be in (hr-image, lr-image) order. 
-        size : int, size of block
-        stride : int, stride of slicing when slice normally
-        num : int, number of blocks to generate
-        seed : None or int, random seed
-    Return:
-        num : int, number of subimages
-        datas : list, with one or two ndarray, 
-                numpy array with shape of (N, size, size, channel), and channel will be 1 if image is in grayscale.
-                If list has two patch of subimages, it will be in (hr-patch, lr-patch) order.
-        NoneType. 
-    """
-    N, data, _ = _slice(images, size=size, stride=stride, scale=scale)
-    if seed != None:
+    if seed:
         np.random.seed(seed)
-    index = np.random.permutation(N)[:num]
-    if len(data) == 1:
-        data = data[0][index]
-        return num, (data), None
-    elif len(data) == 2:
-        label, data = data[0][index], data[1][index]
-        return num, (label, data), None
-    else:
-        print('Wrong size of images, length of which should be 1 or 2!')
-        raise ValueError
 
-def im_slice(images, size, stride, scale, num=None, threshold=None, seed=None, mode='normal'):
-    """
-    With different mode, return different subimages. 
-    See _slice, _slice_rm_redundance, _slice_random for details. 
-    Inputs:
-        image, list, with numpy array
-        size, int or tuple
-        stride, int
-        num, int. If mode is random, num's value will decide the number of blocks to generate. 
-        threshold, int. If mode is rm_redundance, threshold's value will decide the redundance threshold. 
-                        Higher threshold value means more likely to be removed. 
-        mode : str. It should be normal, random or rm_redundance. 
-    """
-    assert mode in ('random', 'rm_redundance',
-                    'normal'), 'Wrong mode, mode should be random, rm_redundance or normal!'
-    if isinstance(size, tuple):
-        size = size[0]
+    blocks = slice_normal(image, size, stride, to_array=True)
+    index = np.random.permutation(len(blocks))[:nb_blocks]
+    blocks = blocks[index]
+    if to_array:
+        blocks = np.array(blocks)
+    return blocks
 
-    if mode == 'random':
-        assert isinstance(num, int), 'param \'num\' should be integer!'
-        return _slice_random(images, size, stride, scale, num, seed)
-    elif mode == 'rm_redundance':
-        assert isinstance(
-            threshold, int), 'param \'threshold\' should be integer!'
-        return _slice_rm_redundance(images, size, stride, scale, threshold)
+
+def _is_redundance(subim, blocks, threshold):
+    """Use MSE to decide if the subim is redundance to blocks."""
+    mses = np.mean(np.square(np.array(blocks) - subim), axis=(1, 2))
+    if np.sum(mses < threshold) == 0:
+        return False
     else:
-        return _slice(images, size, stride, scale)
+        return True
+
+
+def slice_rr(image, size, stride, threshold, to_array=False, **kargs):
+    """Slice a image into blocks with removing redundance.
+
+        We slice the image into blocks and do some filtering. We define the redundance by this:
+                If two blocks' MSE value is smaller than threshold, one of them is redundance.
+            In this case, we discard blocks which are regarded as redundance.
+
+
+
+        Args:
+            image: Numpy array.
+            size: Int defines height and width of blocks.
+            stride: Stride defines the length of step once a time. #FIXME bad discription
+            threshold: Value of the threshold to discard blocks.    
+            to_array: Set true if you want to return a numpy array instead of a list.
+
+        Returns:
+            List of blocks. Or a numpy array if to_array is true.
+            NoneType.
+
+        Raises:
+            IOError: An error occured when Discription #FIXME
+    """
+    if not isinstance(image, np.ndarray):
+        image = np.array(image)
+    blocks = []
+    h, w = image.shape[:2]
+    if len(image.shape) == 2:
+        image = image.reshape((h, w, 1))
+
+    for x in range(0, h - size + 1, stride):
+        for y in range(0, w - size + 1, stride):
+            subim = image[x: x + size, y: y + size, :]
+            if not len(blocks) or not _is_redundance(subim, blocks, threshold):
+                blocks.append(subim)
+
+    if to_array:
+        blocks = np.array(blocks)
+    return blocks
+
+
+def _slice_multiscale_rr(images, size, stride, threshold):
+    if not isinstance(images, list) and not isinstance(images, tuple):
+        raise ValueError("Input images should be a list or tuple!")
+    if len(images[0].shape) == 2:
+        images = [image.reshape((image.shape[0], image.shape[1], 1))
+                  for image in images]
+    _scales = [images[0].shape[0]//image.shape[0] for image in images]
+    assert _scales[0] == 1, "Why first value of scales is not 1 ?!"
+    blocks = [[] for _ in range(len(images))]
+    h, w = images[0].shape[:2]
+    for x in range(0, h - size + 1, stride):
+        for y in range(0, w - size + 1, stride):
+            subims = [images[i][x//_scales[i]: (x+size)//_scales[i], y//_scales[i]: (
+                y+size)//_scales[i], :] for i in range(len(images))]
+            if not len(blocks[0]) or not _is_redundance(subims[0], blocks[0], threshold):
+                for i, block in enumerate(blocks):
+                    block.append(subims[i])
+
+    blocks = [np.array(block) for block in blocks]
+    return blocks
+
+
+def slice_multiscale(images, size, stride, mode="NORMAL", nb_blocks=None, threshold=None):
+    """Slice a batch of images into blocks.
+
+        Slicing a batch of images which could be in different shape. If shape is not same, we will use the first image as standard and calculate the size and stride of other images' blocks by default. Or you can specify the size of them. 
+
+        Args:
+            images: List of images. Length of images should be less than 10.
+            size: Int defines size of blocks of first image, which will be set as standard size. If the other image are in different shape with first image, we will scale the block size and stride as well. 
+            stride: Length of step to slicing of the first image. See above for details. #FIXME bad discription. 
+            mode: Slicing mode, could be one of the "NORMAL", "RANDOM", "RR"
+            nb_blocks: If slicing mode is "RANDOM", nb_blocks should be a integer. See slice_random() for details.
+            threshold: If slicing mode is "RR", threshold should be a integer. See slice_rr() for details.
+
+        Returns:
+            List contains all blocks of different image.
+
+        Raises:
+            ValueError: An error occured when input images if not a list.
+            ValueError: Name of kargs are incorrect.
+            ValueError: If nb_blocks or threshold is None when mode is "RANDOM" or "RR", this error raises.
+            ValueError: If mode is not in ["NORMAL", "RANDOM", "RR"].
+    """
+    if not isinstance(images, list):
+        raise ValueError("Input images should be a list!")
+    _scales = [images[0].shape[0]//image.shape[0] for image in images]
+    assert _scales[0] == 1, "Why first value of scales is not 1 ?!"
+    sizes = [size//scale for scale in _scales]
+    strides = [stride//scale for scale in _scales]
+
+    to_arrays = [True for _ in range(len(images))]
+
+    if mode == "NORMAL":
+        return list(map(slice_normal, images, sizes, strides, to_arrays))
+    elif mode == "RANDOM":
+        if nb_blocks:
+            nb_blockss = [nb_blocks for _ in range(len(images))]
+            seed = np.random.randint(10)
+            seeds = [seed for _ in range(len(images))]
+            return list(map(slice_random, images, sizes, strides, nb_blockss, seeds, to_arrays))
+        else:
+            raise ValueError("In \"RANDOM\", nb_blocks cannot be NoneType!")
+    elif mode == "RR":
+        if threshold:
+            return _slice_multiscale_rr(images, size, stride, threshold)
+        else:
+            raise ValueError("In \"RR\", threshold cannot be NoneType!")
+    else:
+        raise ValueError(
+            "Mode should be one of the \"NORMAL\", \"RANDOM\", \"RR\"!")
 
 
 def _merge_gray_(images, size, stride):
-    """
-    merge the subimages to whole image in grayscale. 
-    Input:
-            images: numpy array of subimages 
-            size : tuple, (nx, ny) which is from the func _slice. 
-            stride : the stride of generating subimages. 
-    Output:
-            numpy array with the same shape of original image(after modcropping)
-    """
-
+    """merge subimages into whole image in gray-scale."""
     sub_size = images.shape[1]
     nx, ny = size[0], size[1]
     img = np.zeros((sub_size*nx, sub_size*ny, 1))
@@ -447,541 +394,279 @@ def _merge_gray_(images, size, stride):
 
 
 def merge_to_whole(images, size, stride):
-    images = formulate(images)
+    """merge the subimages to whole image. 
+
+        A merging algorithm to merge subimages into whole image.
+
+        Args:
+            images: List of subimages or a numpy array.
+            size: nx and ny, see slice_normal() for details.
+            stride: stride of slicing.
+
+        Returns:
+            Whole image in numpy array.
+    """
+    if isinstance(images, list):
+        images = np.array(images)
+    if len(images.shape) == 3:
+        images = images[:, :, :, np.newaxis]
     channel = images.shape[-1]
-    assert channel in (1, 3, 4), 'Wrong channel of input images!'
-    images_in_channel = []
-    for i in range(channel):
-        images_in_channel.append(_merge_gray_(
-            formulate(images[:, :, :, i]), size=size, stride=stride))
-    orig_image = np.array(images_in_channel)*255.
-    return orig_image.transpose(1, 2, 0).squeeze()
+    new_image = np.array(list(map(_merge_gray_, [images[:, :, :, i] for i in range(
+        channel)], [size for _ in range(channel)], [stride for _ in range(channel)])))
+    return new_image
 
 
-"""
-image_generator
-"""
+def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
+    """Generate hr and lr blocks.
+
+        Using slice first method to generate hr and lr blocks.
+
+        Args:
+            image: File path of image, should be a valid path.
+            scale: Int defines the downsample scale_factor. Or a list of scales.
+            slice_type: One of the function of slice_normal, slice_random and slice_rr.
+            hr_size: Tuple defines the height and width of hr blocks.
+            hr_stride: Int defines the stride of slicing.
+            lr_shape: Tuple defines the height and width of lr block or 0 for lr_size or 1 for hr_size.
+            interp: String defines the interplotion method when downsampling.
+            nb_blocks: Int defines the number of blocks only if slice_type is slice_random.
+            seed: Numpy random seed only if slice_type is slice_random.
+            threshold: Int defines the threshold to remove redundance only if slice_type is slice_rr.
+            merge: Bool defines whether merge to whole image or not only if slice_type is slice_normal.
+
+        Returns:
+            Dictionary of hr and lr blocks.
+
+        Raises:
+            ValueError: An error occured when scale is not a integer or a list(tuple) of integers.
+            ValueError: An Warning occured when hr_size is not dividable by scale.
+    """
+    hr_img = np.array(Image.open(image))
+    hr_blocks = slice_type(hr_img, hr_size, hr_stride, to_array=True,
+                           merge=False, nb_blocks=nb_blocks, seed=seed, threshold=threshold)
+    if sum([hr_size % sc for sc in scale]):
+        raise ValueError(
+            "Hr_size should be dividable by scale of %s" % (str(scale)))
+    data = {"hr": hr_blocks}
+    if isinstance(scale, int):
+        lr_blocks = hr2lr_batch(
+            hr_blocks, scale, shape=lr_shape, interp=interp, keepdim=True)
+        data["lr_%dX" % (scale)] = np.array(lr_blocks)
+    elif isinstance(scale, list) or isinstance(scale, tuple):
+        lr_blocks = [hr2lr_batch(
+            hr_blocks, sc, shape=lr_shape, interp=interp, keepdim=True) for sc in scale]
+        for i, sc in enumerate(scale):
+            data["lr_%dX" % (sc)] = np.array(lr_blocks[i])
+    else:
+        raise ValueError(
+            "Scale should be an integer or a list(tuple) of integers.")
+    return data
 
 
-class Dataset(object):
-    def __init__(self, image_dir, data_label_path=None):
-        """
-        if data and label have already saved, save_path 
-        should be the path to h5 or dir of blocks.  
-        """
-        self.image_dir = os.path.abspath(image_dir)
-        self.save_path = data_label_path
-        if self.save_path != None:
-            self._unpack()
+def hrlr_downsampleFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
+    """Generate hr and lr blocks.
 
-    def config_preprocess(self,
-                          num_img_max=100,
-                          color_mode='F',
+        Using slice first method to generate hr and lr blocks.
 
-                          slice_mode='normal',
-                          hr_size=48,
-                          stride=24,
-                          num_blocks=None,
-                          threshold=None,
-                          seed=None,
+        Args:
+            image: File path of image, should be a valid path.
+            scale: Int defines the downsample scale_factor. Or a list of scales.
+            slice_type: Slicing mode, could be one of the "NORMAL", "RANDOM", "RR".
+            hr_size: Tuple defines the height and width of hr blocks.
+            hr_stride: Int defines the stride of slicing.
+            lr_shape: Tuple defines the height and width of lr block or 0 for lr_size or 1 for hr_size.
+            interp: String defines the interplotion method when downsampling.
+            nb_blocks: Int defines the number of blocks only if slice_type is slice_random.
+            seed: Numpy random seed only if slice_type is slice_random.
+            threshold: Int defines the threshold to remove redundance only if slice_type is slice_rr.
+            merge: Bool defines whether merge to whole image or not only if slice_type is slice_normal.
 
-                          downsample_mode='bicubic',
-                          scale=4,
-                          lr_size=None):
-        """
-        Configure the preprocessing param. 
-        """
+        Returns:
+            Dictionary of hr and lr blocks.
 
-        self.num_image = num_img_max
-        self.image_color_mode = color_mode
-        if self.image_color_mode == 'F':
-            self.channel = 1
-        elif self.image_color_mode == 'RGBA':
-            self.channel = 4
+        Raises:
+            ValueError: An error occured when scale is not a integer or a list(tuple) of integers.
+    """
+    hr_img = np.array(Image.open(image))
+    if isinstance(scale, int):
+        lr_img = hr2lr(hr_img, scale, lr_shape, interp, keepdim=True)
+        blocks = slice_multiscale([hr_img, lr_img], hr_size, hr_stride,
+                                  mode=slice_type, nb_blocks=nb_blocks, threshold=threshold)
+    elif isinstance(scale, list):
+        lr_img = [hr2lr(hr_img, sc, lr_shape, interp, keepdim=True)
+                  for sc in scale]
+        blocks = slice_multiscale([hr_img]+lr_img, hr_size, hr_stride,
+                                  mode=slice_type, nb_blocks=nb_blocks, threshold=threshold)
+    else:
+        raise ValueError(
+            "Scale should be an integer or a list(tuple) of integers.")
+
+    data = {"hr": blocks[0]}
+    for i, sc in enumerate(scale):
+        data["lr_%dX" % (sc)] = blocks[i+1]
+    return data
+
+# FIXME
+
+
+def data_generator(image_dir, preprocess, count=False, **kargs):
+    """Generate data using python generator.
+
+        Specify a preprocessing function, we do that func on all images in directory. One time a image.
+
+        Args:
+            image_dir: Directory of images under preprocessed. String.
+            preprocess: A preprocessing function
+                Input: 
+                    First argument should be the name of image, usually read the image by PIL.Image.
+                    Other argument can be alternative, and all feed by **kargs.
+            count: Bool defines whether count the number of data or not.
+            **kargs: Arguments that will be fed into preprocessing function.
+
+        Yield:
+            Same as the output of preprocessing function.
+    """
+    count_num = 0
+    total_num = len(list(sorted(os.listdir(image_dir))))
+    # print(total_num)
+    for filename in sorted(os.listdir(image_dir)):
+        count_num += 1
+        data = preprocess(os.path.join(image_dir, filename), **kargs)
+        # print(count_num)
+        # verbose
+        if not count_num % 2:
+            sys.stdout.write('\r %d data have been generated, %d data remained.' % (
+                count_num, total_num-count_num))
+        if count:
+            yield count_num, data
         else:
-            self.channel = 3
+            yield data
 
-        self.slice_mode = slice_mode
-        self.hr_size = hr_size
-        self.stride = stride
-        self.num = num_blocks
-        self.threshold = threshold
-        self.seed = seed
 
-        self.downsample_mode = downsample_mode
-        self.scale = scale
-        assert hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
-        if lr_size == 'same':
-            self.downsample_flag = 'same'
-            self.lr_size = (self.hr_size, self.hr_size)
-        elif lr_size == None:
-            self.downsample_flag = None
-            self.lr_size = (self.hr_size // self.scale, self.hr_size // self.scale)
+def save_h5(image_dir, save_path, preprocess, **kargs):
+    """Save data into h5 file.
+
+        We will use preprocessing function to generate the data of images in image_dir, and save them to save_path. Data from image should be in dictionary. Keys are used to create name of dataset.
+
+        Args:
+            image_dir: Directory of images. String.
+            save_path: Path to the h5 file. If doesn't exist, we will create one by default.
+            preprocess: Preprocessing function,
+                Input: First argument should be the name of the image. Usually read the image by PIL.Image modual.
+                Output: Important!! It should return a dictionary, keys are the name of data and data should be numpy array.
+            **kargs: Arguments that will be fed into preprocessing function.
+
+        Raises:
+            IOError: An error occured when Discription #FIXME
+    """
+    with h5py.File(save_path, 'a') as hf:
+        length_dst = {}
+        shape_dst = {}
+        for _, data in data_generator(image_dir, preprocess, count=True, **kargs):
+            for key, value in data.items():
+                if not (key in list(hf.keys())):
+                    shape_dst[key] = tuple(list(value.shape)[1:])
+                    hf.create_dataset(
+                        key, (0,)+shape_dst[key], maxshape=(None,)+shape_dst[key])
+                    length_dst[key] = 0
+                # length_dst[key] += len(value)
+                hf[key].resize(length_dst[key]+len(value), axis=0)
+                hf[key][length_dst[key]: length_dst[key] + len(value)] = value
+                length_dst[key] += len(value)
+        print("Length of different datasets are : " + str(length_dst))
+
+
+def _index_generator(N, batch_size, shuffle=True, seed=None):
+    """Generate index permanantly."""
+    batch_index = 0
+    total_batches_seen = 0
+
+    while 1:
+        if seed is not None:
+            np.random.seed(seed + total_batches_seen)
+
+        if batch_index == 0:
+            index_array = np.arange(N)
+            if shuffle:
+                index_array = np.random.permutation(N)
+
+        current_index = (batch_index * batch_size) % N
+
+        if N >= current_index + batch_size:
+            current_batch_size = batch_size
+            batch_index += 1
         else:
-            print('lr_size should be NoneType or "same!"')
-            raise ValueError
+            current_batch_size = N - current_index
+            batch_index = 0
+        total_batches_seen += 1
 
-        # these param will be changed when saving func or datagen func is called.
-        self.save_path = None
-        self.save_mode = None
-
-        self.batch_size = None
-        self.shuffle = None
-
-        self._pack_up()
-
-    def _pack_up(self):
-        """
-        package up the param of preprocessing to save together with data and label. 
-        """
-
-        self.image = {}
-        self.image['num_image'] = self.num_image
-        self.image['color_mode'] = self.image_color_mode
-        self.image['channel'] = self.channel
-
-        self.slice = {}
-        self.slice['slice_mode'] = self.slice_mode
-        self.slice['hr_size'] = self.hr_size  # int
-        self.slice['stride'] = self.stride
-        self.slice['num_blocks'] = self.num
-        self.slice['threshold'] = self.threshold
-        self.slice['seed'] = self.seed
-
-        self.downsample = {}
-        self.downsample['downsample_mode'] = self.downsample_mode
-        self.downsample['scale'] = self.scale
-        self.downsample['lr_size'] = self.lr_size  # tuple
-
-    def _unpack(self):
-        """
-        Unpack configuration param from saved h5file or directory. 
-        """
-        if os.path.isdir(self.save_path):
-            with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
-                config_info = literal_eval(f.read())
-                self.image = literal_eval(config_info['image'])
-                self.slice = literal_eval(config_info['slice'])
-                self.downsample = literal_eval(config_info['downsample'])
-            
-            self.num_img_max = self.image['num_image']
-            self.image_color_mode = self.image['color_mode']
-            self.channel = self.image['channel']
-
-            self.slice_mode = self.slice['slice_mode']
-            self.hr_size = self.slice['hr_size']
-            self.stride = self.slice['stride']
-            self.num = self.slice['num_blocks']
-            self.threshold = self.slice['threshold']
-            self.seed = self.slice['seed']
-
-            self.downsample_mode = self.downsample['downsample_mode']
-            self.scale = self.downsample['scale']
-            self.lr_size = self.downsample['lr_size']
-
-            assert self.hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
-            if self.lr_size[0] == self.hr_size:
-                self.downsample_flag = 'same'
-            else:
-                self.downsample_flag = None 
-
-        elif os.path.isfile(self.save_path):
-            with h5py.File(self.save_path, 'r') as hf:
-                self.image = literal_eval(hf['image'].value)
-                self.slice = literal_eval(hf['slice'].value)
-                self.downsample = literal_eval(hf['downsample'].value)
-
-            self.num_img_max = self.image['num_image']
-            self.image_color_mode = self.image['color_mode']
-            self.channel = self.image['channel']
-
-            self.slice_mode = self.slice['slice_mode']
-            self.hr_size = self.slice['hr_size']
-            self.stride = self.slice['stride']
-            self.num = self.slice['num_blocks']
-            self.threshold = self.slice['threshold']
-            self.seed = self.slice['seed']
-
-            self.downsample_mode = self.downsample['downsample_mode']
-            self.scale = self.downsample['scale']
-            self.lr_size = self.downsample['lr_size']
-
-            assert self.hr_size % self.scale == 0, 'Hr size is not dividable by scale!'
-            if self.lr_size[0] == self.hr_size:
-                self.downsample_flag = 'same'
-            else:
-                self.downsample_flag = None 
-
-    def _data_label_(self, image_name):
-        """
-        Generate data and label of single picture. 
-            Read image from path.
-            Slice image into blocks.
-            Downsample blocks to lr blocks.
-        Can be overwrited if use other ways to preprocess images. 
-        Input:
-            image_name to be processed.
-        Return:
-            Data and Label to be fed in CNN. 4-D numpy arr. 
-            size_merge, tuple, used to merge the whole image if slicing normally. 
-        """
-        assert self.image_color_mode in ('F', 'RGB', 'YCbCr', 'RGBA'), "Wrong mode of color \
-                                        which should be in ('F', 'RGB', 'YCbCr', 'RGBA')"
-        # read image from image_path.
-        image = imread(os.path.join(self.image_dir, image_name),
-                       mode=self.image_color_mode).astype(np.float)
-
-        # image downsampling.
-        hr_img, lr_img = downsample(
-            image, scale=self.scale, interp=self.downsample_mode, downsample_flag=self.downsample_flag)
-
-        # image slicing.
-        if self.lr_size[0] == self.hr_size:
-            scale = 1
-        else:
-            scale = self.scale
-        N, l_out, size_merge = im_slice((hr_img, lr_img), size=self.hr_size, stride=self.stride, scale=scale,
-                                        num=self.num, threshold=self.threshold, seed=self.seed,
-                                        mode=self.slice_mode)
-        # formulate the data and label to 4-d numpy array and scale to (0, 1)
-        label, data = l_out
-        data = formulate(data) / 255.
-        label = formulate(label) / 255.
-
-        return data, label, N, size_merge
-
-    def _save_H5(self, verbose=1):
-        """
-        Save the data and label of a dataset dirctory into h5 files. 
-        Under enhancing !! Not scalable yet...
-        """
-
-        num_dataInH5File = 0
-        count = 0
-        dataDst_shape = (self.lr_size[0], self.lr_size[1], self.channel)
-        labelDst_shape = (self.hr_size, self.hr_size, self.channel)
-
-        with h5py.File(self.save_path, 'a') as hf:
-            dataDst = hf.create_dataset('data', (0,)+dataDst_shape,
-                                        maxshape=(None, )+dataDst_shape)
-            labelDst = hf.create_dataset('label', (0,)+labelDst_shape,
-                                         maxshape=(None, )+labelDst_shape)
-            # read images in diretory and preprocess them.
-            for filename in sorted(os.listdir(self.image_dir)):
-                count += 1
-                # generate subimages of data and label to save.
-                data, label, N, _ = self._data_label_(filename)
-                # print(data.shape, label.shape)
-                # add subimages of this image into h5 file.
-                dataDst.resize((num_dataInH5File + N, )+dataDst_shape)
-                dataDst[num_dataInH5File: (
-                    num_dataInH5File + N), :, :, :] = data
-                labelDst.resize((num_dataInH5File + N, )+labelDst_shape)
-                labelDst[num_dataInH5File: num_dataInH5File + N, :, :, :] = label
-                num_dataInH5File += N
-
-                if verbose == 1:
-                    if count % 10 == 0:
-                        sys.stdout.write('\r %d images have been written in h5 file, %d remained.' % (
-                            count, self.num_image-count))
-                if count >= self.num_image:
-                    print('\nFinished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode' %
-                          (self.num_image, self.image_dir, self.save_path, num_dataInH5File))
-                    break
-
-            hf.create_dataset('num_subimages', data=num_dataInH5File)
-            # dict cannot be saved in h5file, use string instead.
-            hf.create_dataset('image', data=str(self.image))
-            hf.create_dataset('slice', data=str(self.slice))
-            hf.create_dataset('downsample', data=str(self.downsample))
-
-    def _save_dir(self, verbose=1):
-        """
-        Save the data and label of a dataset dirctory into directory. 
-        Under enhancing !! Not scalable yet...
-        """
-
-        num_images = 0
-        count = 0
-
-        os.mkdir(os.path.join(self.save_path, 'lrImage'))
-        os.mkdir(os.path.join(self.save_path, 'hrImage'))
-
-        # read images in diretory and preprocess them.
-        for filename in sorted(os.listdir(self.image_dir)):
-            count += 1
-            # generate subimages of data and label to save.
-            data, label, N, _ = self._data_label_(filename)
-            # print(data.shape, label.shape)
-            # add subimages of this image into h5 file.
-            for i, lr_img in enumerate(data):
-                imsave(os.path.join(self.save_path, 'lrImage/%d.jpg'%(num_images+i)), lr_img.squeeze())
-            for i, hr_img in enumerate(label):
-                imsave(os.path.join(self.save_path, 'hrImage/%d.jpg'%(num_images+i)), hr_img.squeeze())
-            num_images += N
-
-            if verbose == 1:
-                if count % 10 == 0:
-                    sys.stdout.write('\r %d images have been written in h5 file, %d remained.' % (
-                        count, self.num_image-count))
-            if count >= self.num_image:
-                print('\nFinished! %d hr-images in %s have been saved to %s as %d subimages together with lr-mode' %
-                        (self.num_image, self.image_dir, self.save_path, num_images))
-                break
-        config_info = {}
-        config_info['num_subimages'] = num_images
-        config_info['image'] = str(self.image)
-        config_info['slice'] = str(self.slice)
-        config_info['downsample'] = str(self.downsample)
-        with open(os.path.join(self.save_path, 'config.txt'), 'w') as f:
-            f.write(str(config_info))
-
-    def save_data_label(self, save_mode='h5', save_path=None, verbose=1):
-        """
-        Save data and label to h5 file or to a directory. 
-        If saved, use this func to claim the link of saved file/dir to this instance. 
-        Input:  
-            save_mode : str, should be h5 or dir 
-        """
-        assert save_mode in ('h5', 'dir'), 'Save_mode should be h5 or dir. '
-
-        self.save_mode = save_mode
-        if save_path == None:
-            if save_mode == 'h5':
-                self.save_path = './h5_files/%s.h5' % (
-                    self.image_dir.split('/')[-1])
-            elif save_mode == 'dir':
-                self.save_path = './Data_images/%s/' % (
-                    self.image_dir.split('/')[-1])
-        else:
-            self.save_path = save_path
-
-        if self._is_saved():
-            print('Congratulation! %s already exists!' % (self.save_path))
-
-            return None
-        elif self.save_mode == 'h5':
-            hf = h5py.File(self.save_path, 'a')
-            hf.close()
-            assert os.path.isfile(
-                self.save_path), 'Save path should be a h5 file!'
-
-            return self._save_H5(verbose=verbose)
-        elif self.save_mode == 'dir':
-            os.mkdir(self.save_path)
-            assert os.path.isdir(
-                self.save_path), 'Save path should be a dirctory!'
-
-            return self._save_dir(verbose=verbose)
-
-    def _image_flow_from_h5(self, big_batch_size=1000):
-        """
-        A python generator, to generate patch of data and label. 
-        Input:
-            big_batch_size : None or int, 
-                This is used to speed up generating data. Frequent IO operation from
-                h5 file is slow, so we crush a big batch of data into memory and read 
-                patch from numpy array.
-                Value of big_batch_size shouldn't be too large in case of memory outrage or 
-                too small in case of reading from h5 file frequently. 
-
-        """
-        assert os.path.exists(
-            self.save_path), 'Please save the data and label to %s' % (self.save_path)
+        yield (index_array[current_index: current_index + current_batch_size],
+               current_index, current_batch_size)
 
 
-        if self.shuffle:
-            if big_batch_size != None:
-                while True:
-                    with h5py.File(self.save_path, 'r') as hf:
-                        N = int(hf['num_subimages'].value)
-                        index_generator = self._index_generator(big_batch_size)
-                        for i in range(N//big_batch_size):
-                            data = hf['data'][i *
-                                              big_batch_size: (i+1)*big_batch_size]
-                            label = hf['label'][i *
-                                                big_batch_size: (i+1)*big_batch_size]
-                            for j in range(big_batch_size//self.batch_size):
-                                index_array, _, current_batch_size = next(
-                                    index_generator)
-                                batch_x = np.zeros(
-                                    (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
-                                batch_y = np.zeros(
-                                    (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
-                                for k, index in enumerate(index_array):
-                                    batch_x[k] = data[index]
-                                    batch_y[k] = label[index]
-                                yield (batch_x, batch_y)
-            else:
-                while True:
-                    with h5py.File(self.save_path, 'r') as hf:
-                        N = int(hf['num_subimages'].value)
-                        index_generator = self._index_generator(N)
-                        index_array, _, current_batch_size = next(
-                            index_generator)
-                        batch_x = np.zeros(
-                            (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
-                        batch_y = np.zeros(
-                            (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
-                        for k, index in enumerate(index_array):
-                            batch_x[k] = hf['data'][index]
-                            batch_y[k] = hf['label'][index]
-                        yield (batch_x, batch_y)
-        else:
-            while True:
-                if big_batch_size != None:
-                    with h5py.File(self.save_path, 'r') as hf:
-                        for i in range(N//big_batch_size):
-                            data = hf['data'][i *
-                                              big_batch_size: (i+1)*big_batch_size]
-                            label = hf['label'][i *
-                                                big_batch_size: (i+1)*big_batch_size]
-                            for j in range(big_batch_size//self.batch_size):
-                                batch_x = data[j *
-                                               self.batch_size:(j+1)*self.batch_size]
-                                batch_y = label[j *
-                                                self.batch_size:(j+1)*self.batch_size]
-                                yield (batch_x, batch_y)
-                else:
-                    with h5py.File(self.save_path, 'r') as hf:
-                        batch_x = hf['data'][j *
-                                             self.batch_size:(j+1)*self.batch_size]
-                        batch_y = hf['label'][j *
-                                              self.batch_size:(j+1)*self.batch_size]
-                        yield (batch_x, batch_y)
+def image_flow_h5(h5_path, batch_size, big_batch_size=1000, shuffle=True, index=None):
+    """Image flow from h5 file.
 
-    def _image_flow_from_dir(self, big_batch_size=1000):
-        assert os.path.exists(
-            self.save_path), 'Please save the data and label to %s' % (self.save_path)
+        Using python generator to generate image flow from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We save a size of big_batch_size of data into memory and generate batch during every big batch.
 
-        if self.shuffle:
-            if big_batch_size != None:
-                while True:
-                    with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
-                        N = literal_eval(f.read())['num_subimages']
-                    index_generator = self._index_generator(big_batch_size)
-                    for i in range(0, N, big_batch_size):
-                        if i+big_batch_size >= N:
-                            break 
-                        data = []
-                        label = []
-                        for j in range(big_batch_size):
-                            data.append(imread(os.path.join(self.save_path, 'lrImage/%d.jpg'%(i+j))))
-                            label.append(imread(os.path.join(self.save_path, 'hrImage/%d.jpg'%(i+j))))
-                        for _ in range(big_batch_size//self.batch_size):
-                            index_array, _, current_batch_size = next(
-                                index_generator)
-                            batch_x = np.zeros(
-                                (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
-                            batch_y = np.zeros(
-                                (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
-                            for k, index in enumerate(index_array):
-                                batch_x[k] = data[index]
-                                batch_y[k] = label[index]
-                            yield (batch_x, batch_y)
-            else:
-                while True:
-                    with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
-                        N = literal_eval(f.read())['num_subimages']
-                    index_generator = self._index_generator(N)
-                    index_array, _, current_batch_size = next(
-                        index_generator)
-                    batch_x = np.zeros(
-                        (current_batch_size,) + (self.lr_size[0], self.lr_size[1], self.channel))
-                    batch_y = np.zeros(
-                        (current_batch_size,) + (self.hr_size, self.hr_size, self.channel))
-                    for k, index in enumerate(index_array):
-                        batch_x[k] = formulate(imread(os.path.join(self.save_path, 'lrImage/%d.jpg'%(index))))[0]
-                        batch_y[k] = formulate(imread(os.path.join(self.save_path, 'hrImage/%d.jpg'%(index))))[0]
-                    yield (batch_x, batch_y)
-        else:
-            raise NotImplementedError
+        Args:
+            h5_path: String, the path of h5 file.
+            batch_size: Int, the size of batch.
+            big_batch_size: Int, size of big batch.
+            shuffle: Bool, whether shuffle the data or not.
+            index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets.
 
-    def image_flow(self, big_batch_size=1000, batch_size=16, shuffle=True):
-        """
-        Image Generator to generate images by batches. 
-        Input:
-            flow_mode: str, should be h5 or dir
-        """
-        self.batch_size = batch_size
-        self.shuffle = shuffle
-
-        assert self._is_saved(), "Please save the data and label first! \nOr claim the link of saved file to this instance by call 'save_data_label' func!"
-
-        if os.path.isfile(self.save_path):
-            return self._image_flow_from_h5(big_batch_size=big_batch_size)
-        elif os.path.isdir(self.save_path):
-            return self._image_flow_from_dir(big_batch_size=big_batch_size)
-
-    def _index_generator(self, N):
-        batch_size = self.batch_size
-        shuffle = self.shuffle
-        seed = self.seed
-        batch_index = 0
-        total_batches_seen = 0
-
-        while 1:
-            if seed is not None:
-                np.random.seed(seed + total_batches_seen)
-
-            if batch_index == 0:
-                index_array = np.arange(N)
-                if shuffle:
-                    index_array = np.random.permutation(N)
-
-            current_index = (batch_index * batch_size) % N
-
-            if N >= current_index + batch_size:
-                current_batch_size = batch_size
-                batch_index += 1
-            else:
-                current_batch_size = N - current_index
-                batch_index = 0
-            total_batches_seen += 1
-
-            yield (index_array[current_index: current_index + current_batch_size],
-                   current_index, current_batch_size)
-
-    def get_num_data(self):
-        assert self._is_saved(), 'Data hasn\'t been saved!'
-        if os.path.isdir(self.save_path):
-            with open(os.path.join(self.save_path, 'config.txt'), 'r') as f:
-                num_data = literal_eval(f.read())['num_subimages']
-        elif os.path.isfile(self.save_path):
-            with h5py.File(self.save_path, 'r') as hf:
-                num_data = int(hf['num_subimages'].value)
-        return num_data
-
-    def cancel_save(self):
-        # delete the h5 file or saving dir.
-        if self._is_saved():
-            if os.path.isfile(self.save_path):
-                os.remove(self.save_path)
-            elif os.path.isdir(self.save_path):
-                shutil.rmtree(self.save_path)
-
-    def _is_saved(self):
-        if self.save_path != None and os.path.exists(self.save_path):
-            return True
-        else:
-            return False
-
-
-if __name__ == "__main__":
-    image_dir = './test_image/'
-    dst = Dataset(image_dir)
-    dst.config_preprocess(num_img_max=10, color_mode="RGB", 
-                      hr_size=40, stride = 20, scale=2, lr_size=None)
-    dst.save_data_label(save_mode='dir', save_path='./test_sub_images/', )
-    datagen = dst.image_flow(big_batch_size=None, batch_size=20)
+        Raises:
+            AssertError: An error occured when length of different dataset in h5 file are different.
+    """
     while True:
-        if input() == 'n':
-            data, label = next(datagen)
-            print(data.shape, label.shape)
-            plt.subplot(121)
-            plt.imshow(np.uint8(data[0]))
-            plt.subplot(122)
-            plt.imshow(np.uint8(label[0]))
-            plt.show()
-        else:
-            break
+        with h5py.File(h5_path, 'r') as hf:
+            keys = [key for key in hf.keys()]
+            assert [hf[keys[0]].shape[0] == hf[keys[i]].shape[0] for i in range(len(keys))] == [
+                True for _ in range(len(keys))], "Why these data in h5 files have different lengths?!"
+            N = hf[keys[0]].shape[0]
+            index_generator = _index_generator(
+                big_batch_size, batch_size, shuffle)
+            for i in range(N//big_batch_size):
+                data = [
+                    hf[key][i*big_batch_size:(i+1)*big_batch_size] for key in keys]
+                for _ in range(big_batch_size//batch_size):
+                    index_array, _, current_batch_size = next(index_generator)
+
+                    batches = [
+                        np.zeros((current_batch_size,)+tuple(list(dt.shape)[1:])) for dt in data]
+
+                    for k, index_ in enumerate(index_array):
+                        for i in range(len(data)):
+                            batches[i][k] = data[i][index_]
+                    
+                    if index:
+                        yield tuple([batches[i] for i in index])
+                    else:
+                        yield tuple(batches)
+
+# TODO(mulns): debugging main func implementation. (2018.6.17)
+
+
+def main():
+    # save_h5(image_dir="./test_image/", save_path="./example/test.h5", preprocess=hrlr_sliceFirst,
+    #         scale=[2, 3, 4], slice_type=slice_random, hr_size=48, hr_stride=24, lr_shape=0, threshold=50, nb_blocks=10)
+
+    datagen = image_flow_h5("./example/test.h5", batch_size=10,
+                  big_batch_size=100, shuffle=True, index=(0,3))
+    batches = next(datagen)
+    imgs = []
+    for batch in batches:
+        print(batch.shape)
+        imgs.append(batch[0])
+    for i in range(len(imgs)):
+        plt.subplot(1, len(imgs), i+1)
+        plt.imshow(imgs[i].squeeze())
+    plt.show()
+
+
+
+if __name__ == '__main__':
+    main()
+
+# TODO(mulns): Change the name of preprocess to your_func.
