@@ -11,7 +11,7 @@ from keras import backend as K
 from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from utils import PSNR, psnr, SubpixelConv2D
-from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, image_flow_h5, image_h5
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, image_flow_h5
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from PIL import Image
