@@ -366,6 +366,8 @@ def slice_multiscale(images, size, stride, mode="NORMAL", nb_blocks=None, thresh
 
 def _merge_gray_(images, size, stride):
     """merge subimages into whole image in gray-scale."""
+    if len(images.shape) == 3:
+        images = images[:,:,:,np.newaxis]
     sub_size = images.shape[1]
     nx, ny = size[0], size[1]
     img = np.zeros((sub_size*nx, sub_size*ny, 1))
@@ -389,7 +391,7 @@ def _merge_gray_(images, size, stride):
     transLeft = transLeft.T
 
     out = transLeft.dot(img.dot(transRight))
-
+    # print(" merge gray has shape of ", out.shape)
     return out
 
 
@@ -411,9 +413,15 @@ def merge_to_whole(images, size, stride):
     if len(images.shape) == 3:
         images = images[:, :, :, np.newaxis]
     channel = images.shape[-1]
-    new_image = np.array(list(map(_merge_gray_, [images[:, :, :, i] for i in range(
-        channel)], [size for _ in range(channel)], [stride for _ in range(channel)])))
-    return new_image
+    new_image = list(map(_merge_gray_, [images[:, :, :, i] for i in range(
+        channel)], [size for _ in range(channel)], [stride for _ in range(channel)]))
+    final_size = (new_image[0].shape[0], new_image[0].shape[1], channel)
+    final_image = np.zeros(final_size)
+    for i in range(channel):
+        final_image[:,:,i] = new_image[i]
+
+    # print("merge_to_whole has shape of ", final_image.shape)
+    return final_image
 
 
 def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
@@ -647,8 +655,6 @@ def image_flow_h5(h5_path, batch_size, big_batch_size=1000, shuffle=True, index=
                         yield tuple([batches[i]/255. for i in index])
                     else:
                         yield tuple(batches)
-
-# TODO(mulns): debugging main func implementation. (2018.6.17)
 
 
 def image_h5(h5_path, index=None):

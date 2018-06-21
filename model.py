@@ -11,14 +11,16 @@ from keras import backend as K
 from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from utils import PSNR, psnr, SubpixelConv2D
-from PIL import Image
 from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, image_flow_h5, image_h5
-import numpy as np
-import os
-import warnings
-import scipy.misc
-import h5py
+import matplotlib.pyplot as plt
 import tensorflow as tf
+from PIL import Image
+import numpy as np
+from scipy import misc
+import warnings
+import h5py
+import sys
+import os
 
 
 class BaseSRModel(object):
@@ -114,51 +116,73 @@ class BaseSRModel(object):
                                  validation_steps=num_val // batch_size + 1, use_multiprocessing=multiprocess, workers=4)
         return self.model
 
-    def gen_sr_img(self, image_path, hr_size, hr_stride, scale=4, lr_shape=0, save=False, save_name="test", verbose=0, **kargs):
+    def evaluate(self, image_path, stride_scale=0.5, scale=4, lr_shape=0, save=False, save_name="test", verbose=1, **kargs):
         """Generate the high-resolution picture with trained model. 
 
             Input:
                 image_name : str, name of image.
                 save : Bool, whether to save the sr-image to local or not.  
-                verbose, int. #FIXME
+                verbose, int. #FIXME All comments need to be fixed.
 
             Return:
                 orig_img, bicubic_img, sr_img and psnr of the hr_img and sr_img. 
         """
+        h, _, _ = self.input_size
+        if lr_shape == 0:
+            hr_size = h*scale
+        elif lr_shape == 1:
+            hr_size = h
+
+        hr_stride = int(hr_size*stride_scale)
+
         img = np.array(Image.open(image_path))
         hr_block, size_merge = slice_normal(
             img, hr_size, hr_stride, to_array=True, merge=True)
         lr_block = hr2lr_batch(hr_block, scale, lr_shape)
-        sr_block = self.model.predict(lr_block, verbose=verbose)
+        assert lr_block[0].shape == self.input_size, "Lr-block size is not appropriate, Something wrong above this line. %s" % (
+            str(lr_block[0].shape))
+        sr_block = self.model.predict(np.array(lr_block)/255., verbose=verbose)
+        # print("sr_block has shape of ", sr_block.shape)
         # merge all subimages.
         hr_img = merge_to_whole(hr_block, size_merge, stride=hr_stride)
-        lr_img = hr2lr(hr_img, scale=scale, shape=1)
-        sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)
+        # lr_img = hr2lr(hr_img, scale=scale, shape=1)
+        sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)*255.
+
         if verbose == 1:
-            print('PSNR is %f' % (psnr(sr_img, hr_img)))
+            print('PSNR is %f' % (psnr(sr_img/255., hr_img/255.)))
         if save:
             scipy.misc.imsave('./example/%s_SR.jpg' % (save_name), sr_img)
-        return (hr_img, lr_img, sr_img), psnr(sr_img, hr_img)
+        return (hr_img, sr_img), psnr(sr_img/255., hr_img/255.)
 
-    def evaluate(self, test_path, verbose=0, **kargs) -> Model:
+    def evaluate_batch(self, test_path, scale=4, lr_shape=1, verbose=0, **kargs) -> Model:
         """evaluate the psnr of whole images which have been merged. 
             Input:
                 test_path. Path of test data.
-                verbose, int. #FIXME
+                verbose, int. #FIXME All comments need to be fixed.
             Return:
                 average psnr of images in test_path. 
         """
         PSNR = []
+        count = 0
+        num_total = len(list(sorted(os.listdir(test_path))))
         for _, _, files in os.walk(test_path):
             for image_name in files:
                 # Read in image
-                _, psnr = self.gen_sr_img(os.path.join(
-                    test_path, image_name), verbose=verbose, **kargs)
+                count+=1
+                _, psnr = self.evaluate(os.path.join(
+                    test_path, image_name), verbose=verbose, scale=scale, lr_shape=lr_shape, ** kargs)
+                if not verbose:
+                    sys.stdout.write("\r %d/%d image has evaluated."%(count, num_total))
                 PSNR.append(psnr)
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n' %
               (test_path, ave_psnr))
         return ave_psnr, PSNR
+
+    def gen_sr_img(self, image_path, stride_scale, scale, lr_shape, save=False, save_name="test", **kargs):
+        pass
+
+# TODO(mulns): Finish gen_sr_img() func and implete the comments.
 
 
 class SRCNN(BaseSRModel):
@@ -377,8 +401,27 @@ def main():
         batch_size=16, big_batch_size=1000, shuffle=True, index=(2, 0))
 
     srcnn = SRCNN("div2k", input_size=(48, 48, 3))
-    srcnn.create_model()
-    srcnn.fit(tr_gen, val_gen, num_train=800000, num_val=100000, batch_size=16)
+    srcnn.create_model(load_weights=True)
+    # srcnn.fit(tr_gen, val_gen, num_train=800000, num_val=100000, batch_size=16)
+    imgs, _ = srcnn.evaluate("./test_image/butterfly_GT.bmp", scale=4, lr_shape=1)
+    
+    misc.imsave("./example/butt_sr.jpg", imgs[1])
+    misc.imsave("./example/butt_hr.jpg", imgs[0])
+    misc.imsave("./example/butt_lr.jpg", misc.imresize(imgs[0], 1/4))
+
+    # psnr, PSNR_List = srcnn.evaluate_batch(
+    #     "../Dataset/DIV2K_valid_HR", scale=4, lr_shape=1, stride_scale=0.5)
+    # print("Average psnr of this Directory is ", psnr)
+    ## Average psnr of this Directory is  27.549315894072866
+
+    plt.subplot(131)
+    plt.imshow(np.uint8(imgs[0]))
+    plt.subplot(132)
+    plt.imshow(np.uint8(imgs[1]))
+    # plt.subplot(133)
+    # plt.plot(np.arange(len(PSNR_List)), PSNR_List)
+    plt.show()
+
 
 
 if __name__ == '__main__':
