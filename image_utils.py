@@ -579,8 +579,8 @@ def save_h5(image_dir, save_path, preprocess, **kargs):
                 hf[key].resize(length_dst[key]+len(value), axis=0)
                 hf[key][length_dst[key]: length_dst[key] + len(value)] = value
                 length_dst[key] += len(value)
-
-        hf.create_dataset("num_blocks", data=length_dst['hr'])
+        keys = list(hf.keys())
+        hf.create_dataset("num_blocks", data=length_dst[keys[0]])
         print("Length of different datasets are : " + str(length_dst))
 
 
