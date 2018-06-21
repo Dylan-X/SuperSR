@@ -122,7 +122,7 @@ def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=
 
     img2 = np.array(img2)
     if keepdim and len(img2.shape) == 2:
-        img2 =  img2[:, :, np.newaxis]
+        img2 = img2[:, :, np.newaxis]
     if return_both:
         return np.array(image), img2
     return img2
@@ -419,7 +419,7 @@ def merge_to_whole(images, size, stride):
 def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
     """Generate hr and lr blocks.
 
-        Using slice first method to generate hr and lr blocks.
+        Using slice first method to generate hr and lr blocks. Only RGB image is available.
 
         Args:
             image: File path of image, should be a valid path.
@@ -546,7 +546,7 @@ def data_generator(image_dir, preprocess, count=False, **kargs):
 def save_h5(image_dir, save_path, preprocess, **kargs):
     """Save data into h5 file.
 
-        We will use preprocessing function to generate the data of images in image_dir, and save them to save_path. Data from image should be in dictionary. Keys are used to create name of dataset.
+        We will use preprocessing function to generate the data of images in image_dir, and save them to save_path. Data from image should be in dictionary. Keys are used to create name of dataset. The last key would be `num_blocks`, and the first key better be `hr`. #FIXME
 
         Args:
             image_dir: Directory of images. String.
@@ -573,6 +573,9 @@ def save_h5(image_dir, save_path, preprocess, **kargs):
                 hf[key].resize(length_dst[key]+len(value), axis=0)
                 hf[key][length_dst[key]: length_dst[key] + len(value)] = value
                 length_dst[key] += len(value)
+
+        # FIXME not scalable!
+        hf.create_dataset("num_blocks", data=length_dst['hr'])
         print("Length of different datasets are : " + str(length_dst))
 
 
@@ -614,16 +617,15 @@ def image_flow_h5(h5_path, batch_size, big_batch_size=1000, shuffle=True, index=
             batch_size: Int, the size of batch.
             big_batch_size: Int, size of big batch.
             shuffle: Bool, whether shuffle the data or not.
-            index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets.
+            index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME
 
         Raises:
             AssertError: An error occured when length of different dataset in h5 file are different.
     """
     while True:
         with h5py.File(h5_path, 'r') as hf:
-            keys = [key for key in hf.keys()]
-            assert [hf[keys[0]].shape[0] == hf[keys[i]].shape[0] for i in range(len(keys))] == [
-                True for _ in range(len(keys))], "Why these data in h5 files have different lengths?!"
+            # FIXME any way to avoid this?
+            keys = [key for key in hf.keys()][:-1]
             N = hf[keys[0]].shape[0]
             index_generator = _index_generator(
                 big_batch_size, batch_size, shuffle)
@@ -639,34 +641,54 @@ def image_flow_h5(h5_path, batch_size, big_batch_size=1000, shuffle=True, index=
                     for k, index_ in enumerate(index_array):
                         for i in range(len(data)):
                             batches[i][k] = data[i][index_]
-                    
+
                     if index:
-                        yield tuple([batches[i] for i in index])
+                        # FIXME normalization before this.
+                        yield tuple([batches[i]/255. for i in index])
                     else:
                         yield tuple(batches)
 
 # TODO(mulns): debugging main func implementation. (2018.6.17)
 
 
-def main():
-    # save_h5(image_dir="./test_image/", save_path="./example/test.h5", preprocess=hrlr_sliceFirst,
-    #         scale=[2, 3, 4], slice_type=slice_random, hr_size=48, hr_stride=24, lr_shape=0, threshold=50, nb_blocks=10)
+def image_h5(h5_path, index=None):
+    """Generate data from h5 file.
 
-    datagen = image_flow_h5("./example/test.h5", batch_size=10,
-                  big_batch_size=100, shuffle=True, index=(0,3))
+        Read data in h5 file directly.
+
+        Args:
+            h5_path: Path to h5file.
+            index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME
+
+        Returns:
+            data in tuple.
+    """
+    with h5py.File(h5_path, 'r') as hf:
+        keys = [key for key in hf.keys()][:-1]
+        if index:
+            keys = [keys[i] for i in index]
+        data = [np.array(hf[key]) for key in keys]
+    return tuple(data)
+
+
+def main():
+    # save_h5(image_dir="../Dataset/DIV2K_valid_HR", save_path="/media/mulns/F25ABE595ABE1A75/H5File/div2k_val_same_248X.h5", preprocess=hrlr_sliceFirst,
+    #         scale=[2, 4, 8], slice_type=slice_normal, hr_size=48, hr_stride=24, lr_shape=1, threshold=None, nb_blocks=None)
+
+    datagen = image_flow_h5("/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5", batch_size=100,
+                            big_batch_size=1000, shuffle=True, index=(0, 2))
     batches = next(datagen)
     imgs = []
     for batch in batches:
         print(batch.shape)
-        imgs.append(batch[0])
+        imgs.append(batch[10])
     for i in range(len(imgs)):
         plt.subplot(1, len(imgs), i+1)
         plt.imshow(imgs[i].squeeze())
     plt.show()
 
 
-
 if __name__ == '__main__':
     main()
 
-# TODO(mulns): Change the name of preprocess to your_func.
+# TODO(mulns): Change the name of `preprocess` to `your_func`.

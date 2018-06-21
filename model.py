@@ -12,14 +12,13 @@ from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from utils import PSNR, psnr, SubpixelConv2D
 from PIL import Image
-from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, image_flow_h5, image_h5
 import numpy as np
 import os
 import warnings
 import scipy.misc
 import h5py
 import tensorflow as tf
-
 
 
 class BaseSRModel(object):
@@ -127,7 +126,8 @@ class BaseSRModel(object):
                 orig_img, bicubic_img, sr_img and psnr of the hr_img and sr_img. 
         """
         img = np.array(Image.open(image_path))
-        hr_block, size_merge = slice_normal(img, hr_size, hr_stride, to_array=True, merge=True)
+        hr_block, size_merge = slice_normal(
+            img, hr_size, hr_stride, to_array=True, merge=True)
         lr_block = hr2lr_batch(hr_block, scale, lr_shape)
         sr_block = self.model.predict(lr_block, verbose=verbose)
         # merge all subimages.
@@ -152,7 +152,8 @@ class BaseSRModel(object):
         for _, _, files in os.walk(test_path):
             for image_name in files:
                 # Read in image
-                _, psnr = self.gen_sr_img(os.path.join(test_path, image_name), verbose=verbose, **kargs)
+                _, psnr = self.gen_sr_img(os.path.join(
+                    test_path, image_name), verbose=verbose, **kargs)
                 PSNR.append(psnr)
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n' %
@@ -366,3 +367,19 @@ class EDSR(BaseSRModel):
         m = Add(name="res_merge_" + str(id))([x, init])
 
         return m
+
+
+def main():
+    tr_gen = image_flow_h5("/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5",
+                           batch_size=16, big_batch_size=1000, shuffle=True, index=(2, 0))
+    val_gen = image_flow_h5(
+        "/media/mulns/F25ABE595ABE1A75/H5File/div2k_val_same_248X.h5",
+        batch_size=16, big_batch_size=1000, shuffle=True, index=(2, 0))
+
+    srcnn = SRCNN("div2k", input_size=(48, 48, 3))
+    srcnn.create_model()
+    srcnn.fit(tr_gen, val_gen, num_train=800000, num_val=100000, batch_size=16)
+
+
+if __name__ == '__main__':
+    main()
