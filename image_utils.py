@@ -20,6 +20,14 @@ MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
 
 
+
+"""
+Image processing such as downsampling, slicing, merging and so on.
+You can also add your_func to generate the data you want, and use function in Flow.py to save and flow.
+"""
+
+
+
 ############################################
 # DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING.
 ############################################
@@ -429,7 +437,6 @@ def merge_to_whole(images, size, stride):
 # SAMPLE OF IMAGE-PROCESSING FUNCTION.
 ############################################
 
-
 def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
     """Generate hr and lr blocks of single image.
 
@@ -480,6 +487,16 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
         raise ValueError(
             "Scale should be an integer or a list(tuple) of integers.")
     return data
+
+# If you want to use funtion in Flow.py to save and flow data
+# Please follow these rules!
+def your_func(image, **kargs):
+    """image: path to image. Return: dictionary."""
+    img = Image.open(image)
+    img = np.array(img)
+    dic = {"img": img}
+    return dic
+
 
 
 """The function below is deprecated. Because we find that the results of slice-first-mode and downsample-first-mode are exactly the same. So we use slice-first-mode by default to be more scalable."""
@@ -551,9 +568,9 @@ def main():
             plt.subplot(1, len(imgs), i+1)
             plt.imshow(imgs[i].squeeze())
         plt.show()
-    print(num_data)
+    print("Generate ", num_data, "Data")
     with h5py.File(h5path, 'r') as hf:
-        print(hf["num_blocks"].value)
+        print("H5 file has ", hf["num_blocks"].value, "Data in Total.")
 
 
 if __name__ == '__main__':

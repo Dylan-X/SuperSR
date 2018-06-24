@@ -5,11 +5,24 @@
 # Contact : mulns@outlook.com
 # Visit : https://mulns.github.io
 
+
 import os
 import sys
 import h5py
 import numpy as np
 from image_utils import normalize_img
+
+
+
+############################################
+### DATA SAVING AND FLOWING BASED ON H5PY
+############################################
+
+"""
+Considering the big data case, we using python generator to save data and generate data. 
+During saving, we save data generated from your_func one image a time into h5 file. Each dataset in h5 file is a kind of data and the number of them should be the same. The last dataset is named "num_blocks" defines the number of each dataset.
+During flowing, we flow the data from h5 file one batch a time. You can choose whether to generate permanantly or not, and which dataset you want to get. Considering reading from h5 file is slow, we set `big batch` to accelerate the speed of batch generating. 
+"""
 
 
 def data_generator(image_dir, your_func, count=False, **kargs):
