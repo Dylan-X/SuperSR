@@ -1,22 +1,44 @@
+# -*- coding: UTF-8 -*-
+#!/home/mulns/anaconda3/bin/python
+#    or change to /usr/lib/python3
+# Created by Mulns at 2018/6/24
+# Contact : mulns@outlook.com
+# Visit : https://mulns.github.io
+
 # image preprocessing
 import os
 import shutil
 import sys
-from ast import \
-    literal_eval  # used to transform str to dic, because dic cannot be saved in h5file.
 from PIL import Image
 import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
+from Flow import image_flow_h5, save_h5
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
 
 
+
+"""
+Image processing such as downsampling, slicing, merging and so on.
+You can also add your_func to generate the data you want, and use function in Flow.py to save and flow.
+"""
+
+
+
 ############################################
 # DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING.
 ############################################
+
+def normalize_img(image): 
+    # FIXME 
+    """Normalize the image. Only support 8-bit image in numpy array."""
+    if np.max(image) < 1:
+        return image
+    else:
+        return image/255.
 
 
 def color_mode_transfer(image, mode):
@@ -415,7 +437,6 @@ def merge_to_whole(images, size, stride):
 # SAMPLE OF IMAGE-PROCESSING FUNCTION.
 ############################################
 
-
 def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
     """Generate hr and lr blocks of single image.
 
@@ -467,6 +488,16 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
             "Scale should be an integer or a list(tuple) of integers.")
     return data
 
+# If you want to use funtion in Flow.py to save and flow data
+# Please follow these rules!
+def your_func(image, **kargs):
+    """image: path to image. Return: dictionary."""
+    img = Image.open(image)
+    img = np.array(img)
+    dic = {"img": img}
+    return dic
+
+
 
 """The function below is deprecated. Because we find that the results of slice-first-mode and downsample-first-mode are exactly the same. So we use slice-first-mode by default to be more scalable."""
 # def hrlr_downsampleFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
@@ -513,190 +544,37 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
 #     return data
 
 
-############################################
-# GENERATE AND SAVE DATA, FLOW DATA FROM H5FILE
-############################################
-
-def data_generator(image_dir, preprocess, count=False, **kargs):
-    """Generate data using python generator.
-
-        Specify a preprocessing function, we do that func on all images in directory. One time a image.
-
-        Args:
-            image_dir: Directory of images under preprocessed. String.
-            preprocess: A preprocessing function
-                Input: 
-                    First argument should be the path of image, usually read the image by PIL.Image.
-                    Return a dictionay, kes are name of data and value of date should be in numpy array.
-                    Other arguments can be alternative, and all feed by **kargs.
-            count: Bool defines whether count the number of data or not.
-            **kargs: Arguments that will be fed into preprocessing function.
-
-        Yield:
-            Same as the output of preprocessing function.
-    """
-    count_num = 0
-    total_num = len(list(sorted(os.listdir(image_dir))))
-    # print(total_num)
-    for filename in sorted(os.listdir(image_dir)):
-        count_num += 1
-        data = preprocess(os.path.join(image_dir, filename), **kargs)
-        # print(count_num)
-        # verbose
-        if not count_num % 2:
-            sys.stdout.write('\r %d data have been generated, %d data remained.' % (
-                count_num, total_num-count_num))
-        if count:
-            yield count_num, data
-        else:
-            yield data
-
-
-def save_h5(image_dir, save_path, preprocess, **kargs):
-    """Save data into h5 file.
-
-        We will use preprocessing function to generate the data of images in image_dir, and save them to save_path. We save them one image a time, so this func support Big Data case. Data generated from image should be in a dictionary, whose keys are used to create name of dataset in h5File. The last dataset of H5File is called "num_blocks", defines the number of data in each dataset.
-
-        Args:
-            image_dir: Directory of images. String.
-            save_path: Path to the h5 file. If doesn't exist, we will create one by default.
-            preprocess: Preprocessing function,
-                Input: First argument should be the name of the image. Usually read the image by PIL.Image modual.
-                Output: Important!! It should return a dictionary, keys are the name of data and data should be numpy array.
-            **kargs: Arguments that will be fed into preprocessing function.
-    """
-    with h5py.File(save_path, 'a') as hf:
-        length_dst = {}
-        shape_dst = {}
-        for _, data in data_generator(image_dir, preprocess, count=True, **kargs):
-            for key, value in data.items():
-                if not (key in list(hf.keys())):
-                    shape_dst[key] = tuple(list(value.shape)[1:])
-                    hf.create_dataset(
-                        key, (0,)+shape_dst[key], maxshape=(None,)+shape_dst[key])
-                    length_dst[key] = 0
-                # length_dst[key] += len(value)
-                hf[key].resize(length_dst[key]+len(value), axis=0)
-                hf[key][length_dst[key]: length_dst[key] + len(value)] = value
-                length_dst[key] += len(value)
-        keys = list(hf.keys())
-        hf.create_dataset("num_blocks", data=length_dst[keys[0]])
-        print("Length of different datasets are : " + str(length_dst))
-
-
-def _index_generator(N, batch_size, shuffle=True, seed=None):
-    """Generate index permanantly."""
-    batch_index = 0
-    total_batches_seen = 0
-
-    while 1:
-        if seed is not None:
-            np.random.seed(seed + total_batches_seen)
-
-        if batch_index == 0:
-            index_array = np.arange(N)
-            if shuffle:
-                index_array = np.random.permutation(N)
-
-        current_index = (batch_index * batch_size) % N
-
-        if N >= current_index + batch_size:
-            current_batch_size = batch_size
-            batch_index += 1
-        else:
-            current_batch_size = N - current_index
-            batch_index = 0
-        total_batches_seen += 1
-
-        yield (index_array[current_index: current_index + current_batch_size],
-               current_index, current_batch_size)
-
-
-def image_flow_h5(h5_path, batch_size, big_batch_size=1000, shuffle=True, index=None):
-    """Image flow from h5 file.
-
-        Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We save a size of big_batch_size of data into memory and generate batch during every big batch. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs  (data, label) per time.
-
-        Args:
-            h5_path: String, the path of h5 file.
-            batch_size: Int, the size of batch.
-            big_batch_size: Int, size of big batch.
-            shuffle: Bool, whether shuffle the data or not.
-            index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. 
-
-        Raises:
-            AssertError: An error occured when length of different dataset in h5 file are different.
-    """
-    while True:
-        with h5py.File(h5_path, 'r') as hf:
-            keys = [key for key in hf.keys()][:-1]
-            N = hf[keys[0]].shape[0]
-            index_generator = _index_generator(
-                big_batch_size, batch_size, shuffle)
-            for i in range(N//big_batch_size):
-                data = [
-                    hf[key][i*big_batch_size:(i+1)*big_batch_size] for key in keys]
-                for _ in range(big_batch_size//batch_size):
-                    index_array, _, current_batch_size = next(index_generator)
-
-                    batches = [
-                        np.zeros((current_batch_size,)+tuple(list(dt.shape)[1:])) for dt in data]
-
-                    for k, index_ in enumerate(index_array):
-                        for i in range(len(data)):
-                            batches[i][k] = data[i][index_]
-
-                    if index:
-                        yield tuple([batches[i]/255. for i in index])
-                    else:
-                        yield tuple(batches)
-
-
-"""
-The function below reads data from h5 directly to numpy array. It is deprecated because it doesn't support Big Data case. So we use image_flow_h5() instead to generate data one batch a time.
-"""
-# def image_from_h5(h5_path, index=None):
-#     """Generate data from h5 file.
-
-#         Read data in h5 file directly.
-
-#         Args:
-#             h5_path: Path to h5file.
-#             index: Tuple of the index, defines the index of wanted batches. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets.
-#         Returns:
-#             data in tuple.
-#     """
-#     with h5py.File(h5_path, 'r') as hf:
-#         keys = [key for key in hf.keys()][:-1]
-#         if index:
-#             keys = [keys[i] for i in index]
-#         data = [np.array(hf[key]) for key in keys]
-#     return tuple(data)
-
-
 def main():
     # generate and save data to h5 file.
-    save_h5(image_dir="../Dataset/DIV2K_valid_HR", save_path="/media/mulns/F25ABE595ABE1A75/H5File/div2k_val_same_248X.h5",
-            preprocess=hrlr_sliceFirst, scale=[2, 4, 8], slice_type=slice_normal,  hr_size=48, hr_stride=24, lr_shape=1, threshold=None, nb_blocks=None)
+    image_dir = "./test_image/"  # "../Dataset/DIV2K_valid_HR"
+    h5path = "./test.h5"  # "/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5"
+    if not os.path.exists(h5path):
+        save_h5(image_dir=image_dir, save_path=h5path,
+            your_func=hrlr_sliceFirst, scale=[2, 4, 8], slice_type=slice_normal,  hr_size=48, hr_stride=24, lr_shape=1, threshold=None, nb_blocks=None)
 
     # Generator of data from h5File.
-    datagen = image_flow_h5("/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5", batch_size=100,
-                            big_batch_size=1000, shuffle=True, index=(0, 2))
-    
+    datagen = image_flow_h5(h5path, batch_size=399, shuffle=True, keep_batch_size=True,
+                            big_batch_size=1001, index=(0, 1), loop=False)
+
     # Visualize the generator. One batch a time.
-    batches = next(datagen)
-    imgs = []
-    for batch in batches:
-        print(batch.shape)
-        imgs.append(batch[10])
-    for i in range(len(imgs)):
-        plt.subplot(1, len(imgs), i+1)
-        plt.imshow(imgs[i].squeeze())
-    plt.show()
+    num_data = 0
+    for batches in datagen:
+        imgs = []
+        print(batches[0].shape)
+        num_data += batches[0].shape[0]
+        for batch in batches:
+            imgs.append(batch[10])
+        for i in range(len(imgs)):
+            plt.subplot(1, len(imgs), i+1)
+            plt.imshow(imgs[i].squeeze())
+        plt.show()
+    print("Generate ", num_data, "Data")
+    with h5py.File(h5path, 'r') as hf:
+        print("H5 file has ", hf["num_blocks"].value, "Data in Total.")
 
 
 if __name__ == '__main__':
     main()
 
-# TODO(mulns): Change the name of `preprocess` to `your_func`.
-# TODO(mulns): Add image_flow_dir and save_dir function.
+
+
