@@ -14,7 +14,6 @@ import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
-from Flow import image_flow_h5, save_h5
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
@@ -545,6 +544,8 @@ def your_func(image, **kargs):
 
 
 def main():
+    from Flow import image_flow_h5, save_h5
+    
     # generate and save data to h5 file.
     image_dir = "./test_image/"  # "../Dataset/DIV2K_valid_HR"
     h5path = "./test.h5"  # "/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5"
