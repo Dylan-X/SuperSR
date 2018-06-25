@@ -13,9 +13,8 @@ import numpy as np
 from image_utils import normalize_img
 
 
-
 ############################################
-### DATA SAVING AND FLOWING BASED ON H5PY
+# DATA SAVING AND FLOWING BASED ON H5PY
 ############################################
 
 """
@@ -89,7 +88,7 @@ def save_h5(image_dir, save_path, your_func, **kargs):
                 length_dst[key] += len(value)
         keys = list(hf.keys())
         hf.create_dataset("num_blocks", data=length_dst[keys[0]])
-        print("Length of different datasets are : " + str(length_dst))
+        print("\n Length of different datasets are : " + str(length_dst))
 
 
 def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=None, loop=False, epoch=3):
@@ -110,10 +109,10 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
                 Whether generate batch in loop. 
             epoch: Int or None.
                 If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
-        
+
         Yields:
             Index of batch and the number of batch.
-        
+
         Raises:
             Warning: If loop is True and epoch is None, a warning will be occurred because it will be a dead loop.
     """
@@ -166,6 +165,9 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
             index: Tuple of the index, defines the index of wanted datasets. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets.
             normalize: Bool, whether normalize image data or not. We only support image in 8-bit numpy array currently. #FIXME
 
+        Yields:
+            Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]).
+
         Raises:
             Exception: An error occured when h5 file has no key named "num_blocks".
                     Raises:
@@ -173,27 +175,26 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
     """
     with h5py.File(h5_path, 'r') as hf:
         keys = [key for key in hf.keys()]
-        if keys[-1] == 'num_blocks':
-            keys = keys[:-1]
+        if 'num_blocks' in keys:
+            keys = [key for key in keys if key != "num_blocks"]
         else:
             raise Exception("The last key of h5File should be \"num_blocks\"!")
         N = int(hf['num_blocks'].value)
-        if not big_batch_size:
-            big_batch_size = N
+
+        big_batch_size = N if not big_batch_size else big_batch_size
 
         big_batch_gen = index_generator(
             N, big_batch_size, keep_batch_size=False, shuffle=shuffle, seed=seed, loop=loop, epoch=epoch)
         for big_batch_index, current_big_batch_size in big_batch_gen:
-            big_batch = [np.array(hf[key])[big_batch_index] for key in keys]
+            big_batch = [hf[key][[i for i in big_batch_index]] for key in keys]
             batch_gen = index_generator(current_big_batch_size, batch_size,
                                         keep_batch_size=keep_batch_size, shuffle=shuffle, seed=seed, loop=False)
-            for batch_index, current_batch_size in batch_gen:
-                batches = [
-                    np.zeros((current_batch_size,)+tuple(list(dt.shape)[1:])) for dt in big_batch]
+            for batch_index, _ in batch_gen:
+
                 batches = [data[batch_index] for data in big_batch]
 
-                if normalize:
-                    batches = list(map(normalize_img, batches))
+                batches = list(map(normalize_img, batches)
+                               ) if normalize else batches
                 if index:
                     yield tuple([batches[i] for i in index])
                 else:
