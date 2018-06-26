@@ -65,7 +65,7 @@ def color_mode_transfer(image, mode):
         Returns:
             Image been transfered in numpy array.
     """
-    img = Image.fromarray(image)
+    img = Image.fromarray(np.uint8(image))
     img_new = img.new(mode)
     return np.array(img_new)
 
@@ -128,7 +128,7 @@ def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=
     hr_size = list(image.shape[:2])
     lr_size = [int(x/scale) for x in hr_size]
 
-    img = Image.fromarray(image)
+    img = Image.fromarray(np.uint8(image))
     img1 = img.resize(lr_size, resample=MODE[interp])
 
     if isinstance(shape, tuple):
@@ -160,7 +160,7 @@ def modcrop_batch(batch, scale):
         Returns:
             List of images in numpy array.
     """
-    return list(map(modcrop, list(batch), [scale for _ in range(len(batch))]))
+    return list(map(modcrop, [b for b in batch], [scale for _ in range(len(batch))]))
 
 
 def hr2lr_batch(batch, scale, shape=0, interp="BICUBIC", keepdim=False):
@@ -182,7 +182,7 @@ def hr2lr_batch(batch, scale, shape=0, interp="BICUBIC", keepdim=False):
         Raises:
             ValueError: An error occured when shape is not a tuple or 0 or 1.
     """
-    return list(map(lambda img: hr2lr(img, scale, shape, interp, keepdim), list(batch)))
+    return list(map(lambda img: hr2lr(img, scale, shape, interp, keepdim), [b for b in batch]))
 
 
 def slice_normal(image, size, stride, to_array=False, merge=False, **kargs):
