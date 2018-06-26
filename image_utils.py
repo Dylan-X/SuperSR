@@ -555,7 +555,7 @@ def main():
 
     # Generator of data from h5File.
     datagen = image_flow_h5(h5path, batch_size=399, shuffle=True, keep_batch_size=True,
-                            big_batch_size=1001, index=(0, 1), loop=False)
+                            big_batch_size=1001, index=('lr', 'hr'), loop=False)
 
     # Visualize the generator. One batch a time.
     num_data = 0
