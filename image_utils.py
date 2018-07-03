@@ -27,8 +27,22 @@ You can also add your_func to generate the data you want, and use function in Fl
 
 
 ############################################
-# DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING.
+# DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING
 ############################################
+
+def center_crop(img, padding):
+    img = np.array(img)
+    if len(img.shape)==3:
+        h, w, _ = img.shape
+        return img[padding:h-padding, padding:w-padding, :]
+    elif len(img.shape)==2:
+        h, w = img.shape
+        return img[padding:h-padding, padding:w-padding]
+    elif len(img.shape)==4:
+        h, w, _, _ = img.shape
+        return img[padding:h-padding, padding:w-padding, :,:]
+    else:
+        raise ValueError("Wrong shape of image, should be 2 or 3 or 4 -D.")
 
 def normalize_img(image):
     # FIXME
