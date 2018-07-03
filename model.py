@@ -245,7 +245,7 @@ class SRCNN(BaseSRModel):
             input_size, tuple, size of input layer. e.g.(48, 48, 3)
         """
         self.f1 = 9
-        self.f2 = 1
+        self.f2 = 5
         self.f3 = 5
 
         self.n1 = 64
