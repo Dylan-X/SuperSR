@@ -11,7 +11,7 @@ from keras import backend as K
 from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from utils import PSNR, psnr, SubpixelConv2D
-from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, color_mode_transfer
 from Flow import image_flow_h5
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -108,7 +108,7 @@ class BaseSRModel(object):
             self.create_model()
 
         # adam = optimizers.Nadam()
-        adam = optimizers.Adam(lr=learning_rate)
+        adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=5e-6)
         self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
@@ -128,12 +128,25 @@ class BaseSRModel(object):
                                  validation_steps=num_val // batch_size + 1, use_multiprocessing=multiprocess, workers=4)
         return self.model
 
-    def evaluate(self, image_path, stride_scale=0.5, scale=4, lr_shape=0, save=False, save_name="test", verbose=1, **kargs) -> Model:
+
+    def fit_batch(self, x, y, learning_rate=1e-4, loss='mse'):
+        if self.model == None:
+            self.create_model()
+
+        # adam = optimizers.Nadam()
+        adam = optimizers.Adam(lr=learning_rate)
+        self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
+
+        return self.model.train_on_batch(x, y)
+
+
+    def evaluate(self, image_path, mode="auto", stride_scale=0.5, scale=4, lr_shape=0, save=False, save_name="test", verbose=1, **kargs) -> Model:
         """Evaluate the model on one image. 
             Given the image, we first slice it to blocks, then downsample them to lr_block used for evaluation. The lr_block should share the same size with the input size of the model. Output sr-image will be save if you want. 
 
             Input:
                 image_path: String, path to the target image.
+                mode: String of "auto" or "Y", in which Y means the Y-channel of YCbCr mode, and auto means it will take the default mode.
                 stride_scale: Float from 0 to 1, the scale of stride to input size. 
                 scale: Int, scale_factor of downsampling. Better according to the training data.
                 lr_shape: Int or Tuple, if is integer, should be 0 or 1. lr_blocks will be set as scaled size if 0, or as size of hr_block if 1. If is tuple, the lr_block will then be resize to the target size.
@@ -154,11 +167,13 @@ class BaseSRModel(object):
 
         # Read image.
         img = np.array(Image.open(image_path))
+        if mode == "Y":
+            img = self._formulate_(color_mode_transfer(img, "YCbCr")[:, :, 0])
         # Slice first.
         hr_block, size_merge = slice_normal(
             img, hr_size, hr_stride, to_array=True, merge=True)
         # Downsample to lr-batch.
-        lr_block = hr2lr_batch(hr_block, scale, lr_shape)
+        lr_block = self._formulate_(np.array(hr2lr_batch(hr_block, scale, lr_shape)))
         # Generate sr-batch with model.
         sr_block = self.model.predict(np.array(lr_block)/255., verbose=verbose)
         # merge all subimages.
@@ -172,10 +187,11 @@ class BaseSRModel(object):
             misc.imsave('./example/%s_SR.jpg' % (save_name), sr_img)
         return (hr_img, sr_img), psnr(sr_img/255., hr_img/255.)
 
-    def evaluate_batch(self, test_path, scale, lr_shape=1, verbose=0, **kargs):
+    def evaluate_batch(self, test_path, mode="auto", scale=4, lr_shape=1, verbose=0, return_list=False, **kargs):
         """Evaluate the psnr of all images in directory. 
             Input:
                 test_path: String,  path of target images.
+                mode: String of "auto" or "Y", in which Y means the Y-channel of YCbCr mode, and auto means it will take the default mode.
                 scale: Int, scale_factor of downsampling. Better according to the training data.
                 lr_shape: Int or Tuple, if is integer, should be 0 or 1. lr_blocks will be set as scaled size if 0, or as size of hr_block if 1. If is tuple, the lr_block will then be resize to the target size.
                 verbose, int. 0 if show progress. 1 if print psnr of all images.
@@ -191,7 +207,7 @@ class BaseSRModel(object):
                 # Read in image
                 count += 1
                 _, psnr = self.evaluate(os.path.join(
-                    test_path, image_name), verbose=verbose, scale=scale, lr_shape=lr_shape, **kargs)
+                    test_path, image_name), verbose=verbose, scale=scale, lr_shape=lr_shape, mode=mode, **kargs)
                 if not verbose:
                     sys.stdout.write(
                         "\r %d/%d image has evaluated." % (count, num_total))
@@ -199,11 +215,21 @@ class BaseSRModel(object):
         ave_psnr = np.sum(PSNR)/float(len(PSNR))
         print('average psnr of test images(whole) in %s is %f. \n' %
               (test_path, ave_psnr))
-        return ave_psnr, PSNR
+        if return_list:
+            return ave_psnr, PSNR
+        else:
+            return ave_psnr
 
-    def gen_sr_img(self, image_path, stride_scale, scale, lr_shape, save=False, save_name="test", **kargs):
+    def gen_sr_img(self, image_path, mode, stride_scale, scale, lr_shape, save=False, save_name="test", **kargs):
         pass
 
+    def _formulate_(self, x):
+        if len(x.shape) == 2:
+            return x[:, :, np.newaxis]
+        elif len(x.shape) == 3:
+            if not x.shape[-1] in [1, 3, 4]:
+                return x[:, :, :, np.newaxis]
+        return x
 # TODO(mulns): Finish gen_sr_img() func and implete the comments.
 
 
@@ -335,7 +361,7 @@ class EDSR(BaseSRModel):
         self.scale = scale
         super(EDSR, self).__init__("EDSR_"+model_type, input_size)
 
-    def create_model(self, load_weights=False, nb_residual=10):
+    def create_model(self, load_weights=False, nb_residual=32):
 
         init = super(EDSR, self).create_model()
 
@@ -417,43 +443,46 @@ class EDSR(BaseSRModel):
 
 def main():
     # change to yours. See image_utils.py for details.
-    trainH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5"
-    valH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_val_same_248X.h5"
+    trainH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_tr_diff_2348X.h5"
+    valH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5"
 
     # Generator of train data from h5 file.
     tr_gen = image_flow_h5(trainH5_path, batch_size=16,
-                           big_batch_size=1000, shuffle=True, index=(2, 0))
+                           big_batch_size=5000, shuffle=True, index=("lr_2X", "hr"), normalize=True)
     val_gen = image_flow_h5(
-        valH5_path, batch_size=16, big_batch_size=1000,
-        shuffle=True, index=(2, 0))
+        valH5_path, batch_size=16, big_batch_size=5000,
+        shuffle=False, index=("lr_2X", "hr"), normalize=True)
 
-    # Model of SRCNN.
+    # Model .
     srcnn = SRCNN("div2k", input_size=(48, 48, 3))
-    srcnn.create_model(load_weights=False)  # True if weights already exists.
+    srcnn.create_model(load_weights=True)  # True if weights already exists.
+    # edsr = EDSR("div2k_2X", (24,24,3), scale=2)
+    # edsr.create_model(load_weights=False)
 
     # # Train part.
-    srcnn.fit(tr_gen, val_gen, num_train=800000, num_val=100000, batch_size=16)
+    # edsr.fit(tr_gen, val_gen, num_train=800000,
+    #          num_val=100000, batch_size=16, loss="mae")
 
     # Evaluate part.(Only one sample here)
     imgs, _ = srcnn.evaluate(
-        "./test_image/butterfly_GT.bmp", scale=4, lr_shape=1)
+        "./test_image/butterfly_GT.bmp", mode="auto", scale=4, lr_shape=1)
 
     # Save the result.
-    misc.imsave("./example/butt_sr.jpg", imgs[1])
-    misc.imsave("./example/butt_hr.jpg", imgs[0])
-    misc.imsave("./example/butt_lr.jpg", misc.imresize(imgs[0], 1/4))
+    misc.imsave("./example/butt_sr_2X.jpg", imgs[1].squeeze())
+    misc.imsave("./example/butt_hr.jpg", imgs[0].squeeze())
+    misc.imsave("./example/butt_lr_2X.jpg", misc.imresize(imgs[0].squeeze(), 1/3))
 
     # # Evaluate images from a directory and calculate the average psnr.
     psnr, PSNR_List = srcnn.evaluate_batch(
-        "../Dataset/DIV2K_valid_HR", scale=4, lr_shape=1, stride_scale=0.5)
+        "./test_image/set5", mode="auto", scale=3, lr_shape=1, stride_scale=0.5, return_list=True)
     print("Average psnr of this Directory is ", psnr)
     # Average psnr of this Directory(100 images from DIV2K Validation dataset) is  27.549315894072866
 
     # Plot the sample and psnr.
     plt.subplot(131)
-    plt.imshow(np.uint8(imgs[0]))
+    plt.imshow(np.uint8(imgs[0].squeeze()))
     plt.subplot(132)
-    plt.imshow(np.uint8(imgs[1]))
+    plt.imshow(np.uint8(imgs[1].squeeze()))
     plt.subplot(133)
     plt.plot(np.arange(len(PSNR_List)), PSNR_List)
     plt.show()

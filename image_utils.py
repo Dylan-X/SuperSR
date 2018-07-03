@@ -14,10 +14,10 @@ import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
+from utils import psnr
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
-
 
 
 """
@@ -26,13 +26,12 @@ You can also add your_func to generate the data you want, and use function in Fl
 """
 
 
-
 ############################################
 # DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING.
 ############################################
 
-def normalize_img(image): 
-    # FIXME 
+def normalize_img(image):
+    # FIXME
     """Normalize the image. Only support 8-bit image in numpy array."""
     if np.max(image) < 1:
         return image
@@ -66,7 +65,7 @@ def color_mode_transfer(image, mode):
             Image been transfered in numpy array.
     """
     img = Image.fromarray(np.uint8(image))
-    img_new = img.new(mode)
+    img_new = img.convert(mode)
     return np.array(img_new)
 
 
@@ -127,7 +126,6 @@ def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=
     image = modcrop(image, scale)
     hr_size = list(image.shape[:2])
     lr_size = [int(x/scale) for x in hr_size]
-
     img = Image.fromarray(np.uint8(image))
     img1 = img.resize(lr_size, resample=MODE[interp])
 
@@ -160,7 +158,7 @@ def modcrop_batch(batch, scale):
         Returns:
             List of images in numpy array.
     """
-    return list(map(modcrop, [b for b in batch], [scale for _ in range(len(batch))]))
+    return list(map(modcrop, list(batch), [scale for _ in range(len(batch))]))
 
 
 def hr2lr_batch(batch, scale, shape=0, interp="BICUBIC", keepdim=False):
@@ -176,13 +174,14 @@ def hr2lr_batch(batch, scale, shape=0, interp="BICUBIC", keepdim=False):
                    If 1, keep size of the hr_size.
                    If tuple, size to be resize to.
             interp: Mode of interplotion, could be string of "BICUBIC", "NEAREST" and "BILINEAR". We use "BICUBIC" by default.
+            keepdim: Whether set the channel of gray image as 1.
 
         Returns:
             List of images in numpy array.
         Raises:
             ValueError: An error occured when shape is not a tuple or 0 or 1.
     """
-    return list(map(lambda img: hr2lr(img, scale, shape, interp, keepdim), [b for b in batch]))
+    return list(map(lambda img: hr2lr(img, scale, shape, interp, keepdim), [img for img in batch]))
 
 
 def slice_normal(image, size, stride, to_array=False, merge=False, **kargs):
@@ -436,7 +435,7 @@ def merge_to_whole(images, size, stride):
 # SAMPLE OF IMAGE-PROCESSING FUNCTION.
 ############################################
 
-def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None):
+def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, interp="BICUBIC", nb_blocks=None, seed=None, threshold=None, mode="auto"):
     """Generate hr and lr blocks of single image.
 
         Using slice first method to generate hr and lr blocks. Only RGB image is available. Given image in numpy array, we first slice it into blocks, then downsample them to lr-block. If you want write a image processing function, generate data and save to h5 file using 
@@ -457,7 +456,7 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
             nb_blocks: Int defines the number of blocks only if slice_type is slice_random.
             seed: Numpy random seed only if slice_type is slice_random.
             threshold: Int defines the threshold to remove redundance only if slice_type is slice_rr.
-            merge: Bool defines whether merge to whole image or not only if slice_type is slice_normal.
+            mode: String of "auto" or "Y", in which Y means the Y-channel of YCbCr mode, and auto means it will take the default mode.
 
         Returns:
             Dictionary of hr and lr blocks.
@@ -467,6 +466,8 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
             ValueError: An Warning occured when hr_size is not dividable by scale.
     """
     hr_img = np.array(Image.open(image))
+    if mode=="Y":
+        hr_img = color_mode_transfer(hr_img, "YCbCr")[:,:,0]
     hr_blocks = slice_type(hr_img, hr_size, hr_stride, to_array=True,
                            merge=False, nb_blocks=nb_blocks, seed=seed, threshold=threshold)
     if sum([hr_size % sc for sc in scale]):
@@ -489,13 +490,14 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
 
 # If you want to use funtion in Flow.py to save and flow data
 # Please follow these rules!
+
+
 def your_func(image, **kargs):
     """image: path to image. Return: dictionary."""
     img = Image.open(image)
     img = np.array(img)
     dic = {"img": img}
     return dic
-
 
 
 """The function below is deprecated. Because we find that the results of slice-first-mode and downsample-first-mode are exactly the same. So we use slice-first-mode by default to be more scalable."""
@@ -545,17 +547,20 @@ def your_func(image, **kargs):
 
 def main():
     from Flow import image_flow_h5, save_h5
-    
     # generate and save data to h5 file.
-    image_dir = "./test_image/"  # "../Dataset/DIV2K_valid_HR"
-    h5path = "./test.h5"  # "/media/mulns/F25ABE595ABE1A75/H5File/div2k_tr_same_248X.h5"
+    image_dir = "../Dataset/DIV2K_valid_HR"  # "./test_image/"
+    h5path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5" # "./test.h5" 
     if not os.path.exists(h5path):
         save_h5(image_dir=image_dir, save_path=h5path,
-            your_func=hrlr_sliceFirst, scale=[2, 4, 8], slice_type=slice_normal,  hr_size=48, hr_stride=24, lr_shape=1, threshold=None, nb_blocks=None)
+                your_func=hrlr_sliceFirst, scale=[2, 3, 4, 8],
+                slice_type=slice_random, hr_size=48, hr_stride=24, lr_shape=0,
+                threshold=None, nb_blocks=1000, mode="auto")
 
     # Generator of data from h5File.
-    datagen = image_flow_h5(h5path, batch_size=399, shuffle=True, keep_batch_size=True,
-                            big_batch_size=1001, index=('lr', 'hr'), loop=False)
+    datagen = image_flow_h5(h5path, batch_size=100,
+                            keep_batch_size=False, shuffle=False,
+                            big_batch_size=1000,
+                            index=('hr', 'lr_3X'), loop=False)
 
     # Visualize the generator. One batch a time.
     num_data = 0
@@ -565,6 +570,7 @@ def main():
         num_data += batches[0].shape[0]
         for batch in batches:
             imgs.append(batch[10])
+        # print(psnr(imgs[0]/255., imgs[1]/255.))
         for i in range(len(imgs)):
             plt.subplot(1, len(imgs), i+1)
             plt.imshow(imgs[i].squeeze())
@@ -576,6 +582,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-

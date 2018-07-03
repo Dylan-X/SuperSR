@@ -111,7 +111,7 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
                 If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
 
         Yields:
-            Index of batch and the number of batch.
+            List of index of batch and the number of data in batch.
 
         Raises:
             Warning: If loop is True and epoch is None, a warning will be occurred because it will be a dead loop.
@@ -133,7 +133,7 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
                 batch_index = index[i:]
             else:
                 batch_index = index[i: i+batch_size]
-            yield (batch_index, len(batch_index))
+            yield (list(sorted(batch_index)), len(batch_index))
         if epoch:
             count += 1
             if count >= epoch:
@@ -162,11 +162,11 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                 Whether generate batches in loop. 
             epoch: Int or None.
                 If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
-            index: Tuple of the index, defines the index of wanted datasets. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME change to [keys]
+            index: Tuple of the index, defines the index of wanted datasets. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME
             normalize: Bool, whether normalize image data or not. We only support image in 8-bit numpy array currently. #FIXME
 
         Yields:
-            Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]).
+            Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]). The order is decided by index.
 
         Raises:
             Exception: An error occured when h5 file has no key named "num_blocks".
@@ -176,7 +176,8 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
     with h5py.File(h5_path, 'r') as hf:
         keys = [key for key in hf.keys()]
         if 'num_blocks' in keys:
-            keys = list(index) if index else[key for key in keys if key != "num_blocks"]
+            keys = list(index) if index else [
+                key for key in keys if key != 'num_blocks']
         else:
             raise Exception("The last key of h5File should be \"num_blocks\"!")
         N = int(hf['num_blocks'].value)
@@ -184,7 +185,7 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
         big_batch_size = N if not big_batch_size else big_batch_size
 
         big_batch_gen = index_generator(
-            N, big_batch_size, keep_batch_size=False, shuffle=shuffle, seed=seed, loop=loop, epoch=epoch)
+            N, big_batch_size, keep_batch_size=False, shuffle=False, seed=seed, loop=loop, epoch=epoch)
         for big_batch_index, current_big_batch_size in big_batch_gen:
             big_batch = [hf[key][[i for i in big_batch_index]] for key in keys]
             batch_gen = index_generator(current_big_batch_size, batch_size,
