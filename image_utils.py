@@ -139,6 +139,7 @@ def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=
         image = np.array(image)
     image = modcrop(image, scale)
     hr_size = list(image.shape[:2])
+    hr_size.reverse()
     lr_size = [int(x/scale) for x in hr_size]
     img = Image.fromarray(np.uint8(image))
     img1 = img.resize(lr_size, resample=MODE[interp])
