@@ -27,8 +27,22 @@ You can also add your_func to generate the data you want, and use function in Fl
 
 
 ############################################
-# DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING.
+# DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING
 ############################################
+
+def center_crop(img, padding):
+    img = np.array(img)
+    if len(img.shape)==3:
+        h, w, _ = img.shape
+        return img[padding:h-padding, padding:w-padding, :]
+    elif len(img.shape)==2:
+        h, w = img.shape
+        return img[padding:h-padding, padding:w-padding]
+    elif len(img.shape)==4:
+        h, w, _, _ = img.shape
+        return img[padding:h-padding, padding:w-padding, :,:]
+    else:
+        raise ValueError("Wrong shape of image, should be 2 or 3 or 4 -D.")
 
 def normalize_img(image):
     # FIXME
@@ -68,6 +82,34 @@ def color_mode_transfer(image, mode):
     img_new = img.convert(mode)
     return np.array(img_new)
 
+def rgb2ycbcr(image, channel="y"):
+    """transfer rbg image to ycbcr mode.
+    
+        Args:
+            image: Numpy array.
+                The numpy array of image in 3 channel.
+            channel: String.
+                y means y channel.
+                cb means cb channel.
+                cr means cr channel.
+                all means all channel.
+
+        Returns:
+            Numpy array.
+    
+        Raises:
+            ValueError: An error occured when input array is not in 3 channel.
+    """
+    image = np.array(image)
+    if image.shape[-1] != 3:
+        raise ValueError("Image should be RGB channels")
+    else:
+        r, g, b = [image[:,:,i] for i in range(3)]
+        y = .257*r + .504*g + .098*b
+        if channel == "y":
+            return y
+        else:
+            raise NotImplementedError("Not implemented yet.")
 
 def modcrop(image, scale):
     """Crop the image to size which can be devided by scale.
@@ -125,6 +167,7 @@ def hr2lr(image, scale=2, shape=0, interp="BICUBIC", keepdim=False, return_both=
         image = np.array(image)
     image = modcrop(image, scale)
     hr_size = list(image.shape[:2])
+    hr_size.reverse()
     lr_size = [int(x/scale) for x in hr_size]
     img = Image.fromarray(np.uint8(image))
     img1 = img.resize(lr_size, resample=MODE[interp])

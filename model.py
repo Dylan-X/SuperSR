@@ -155,7 +155,7 @@ class BaseSRModel(object):
                 verbose, Int, 0 or 1. Print the psnr if 1, else 0.
 
             Return:
-                Tuple of original image and sr-image.
+                Tuple of original image, lr-image and sr-image.
                 Psnr of this sample.
         """
         h, _, _ = self.input_size
@@ -178,14 +178,14 @@ class BaseSRModel(object):
         sr_block = self.model.predict(np.array(lr_block)/255., verbose=verbose)
         # merge all subimages.
         hr_img = merge_to_whole(hr_block, size_merge, stride=hr_stride)
-        # lr_img = hr2lr(hr_img, scale=scale, shape=1)
+        lr_img = hr2lr(hr_img.squeeze(), scale=scale, shape=1)
         sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)*255.
 
         if verbose == 1:
             print('PSNR is %f' % (psnr(sr_img/255., hr_img/255.)))
         if save:
             misc.imsave('./example/%s_SR.jpg' % (save_name), sr_img)
-        return (hr_img, sr_img), psnr(sr_img/255., hr_img/255.)
+        return (hr_img, lr_img, sr_img), psnr(sr_img/255., hr_img/255.)
 
     def evaluate_batch(self, test_path, mode="auto", scale=4, lr_shape=1, verbose=0, return_list=False, **kargs):
         """Evaluate the psnr of all images in directory. 
@@ -245,7 +245,7 @@ class SRCNN(BaseSRModel):
             input_size, tuple, size of input layer. e.g.(48, 48, 3)
         """
         self.f1 = 9
-        self.f2 = 1
+        self.f2 = 5
         self.f3 = 5
 
         self.n1 = 64
