@@ -82,6 +82,34 @@ def color_mode_transfer(image, mode):
     img_new = img.convert(mode)
     return np.array(img_new)
 
+def rgb2ycbcr(image, channel="y"):
+    """transfer rbg image to ycbcr mode.
+    
+        Args:
+            image: Numpy array.
+                The numpy array of image in 3 channel.
+            channel: String.
+                y means y channel.
+                cb means cb channel.
+                cr means cr channel.
+                all means all channel.
+
+        Returns:
+            Numpy array.
+    
+        Raises:
+            ValueError: An error occured when input array is not in 3 channel.
+    """
+    image = np.array(image)
+    if image.shape[-1] != 3:
+        raise ValueError("Image should be RGB channels")
+    else:
+        r, g, b = [image[:,:,i] for i in range(3)]
+        y = .257*r + .504*g + .098*b
+        if channel == "y":
+            return y
+        else:
+            raise NotImplementedError("Not implemented yet.")
 
 def modcrop(image, scale):
     """Crop the image to size which can be devided by scale.
