@@ -10,7 +10,7 @@ import os
 import sys
 import h5py
 import numpy as np
-from image_utils import normalize_img
+from image_utils import normalize_img, reduce_mean_
 
 
 ############################################
@@ -140,7 +140,7 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
                 break
 
 
-def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, normalize=False):
+def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, normalize=False, reduce_mean=False):
     """Image flow from h5 file.
 
         Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We crash the data with big_batch_size into memory and generate batch during every big batch period. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs  (data, label) per time.
@@ -164,6 +164,7 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                 If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
             index: Tuple of the index, defines the index of wanted datasets. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME
             normalize: Bool, whether normalize image data or not. We only support image in 8-bit numpy array currently. #FIXME
+            reduce_mean: Bool, whether subtract the mean value of RGB of batch.
 
         Yields:
             Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]). The order is decided by index.
@@ -196,6 +197,7 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
 
                 batches = list(map(normalize_img, batches)
                                ) if normalize else batches
+                batches = list(map(reduce_mean_, batches)) if reduce_mean else batches
                 
                 yield tuple(batches)
 
