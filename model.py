@@ -4,7 +4,6 @@ from keras.layers import Concatenate, Add, Average, Input, Dense, Flatten, Batch
 from keras.layers.core import Lambda
 from keras.layers.convolutional import Convolution2D, MaxPooling2D, UpSampling2D, Convolution2DTranspose
 from keras.utils.np_utils import to_categorical
-from keras.utils.io_utils import HDF5Matrix
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 from keras import backend as K
@@ -386,7 +385,7 @@ class EDSR(BaseSRModel):
         model = Model(init, out)
 
         if load_weights:
-            model.load_weights(self.weight_path, by_name=True)
+            model.load_weights(self.weight_path, skip_mismatch=True)
             print("loaded model %s" % (self.model_name))
 
         self.model = model
@@ -439,6 +438,7 @@ class EDSR(BaseSRModel):
         m = Add(name="res_merge_" + str(id))([x, init])
 
         return m
+
 
 
 def main():
