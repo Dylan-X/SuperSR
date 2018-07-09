@@ -107,7 +107,7 @@ class BaseSRModel(object):
             self.create_model()
 
         # adam = optimizers.Nadam()
-        adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=5e-6)
+        adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=0.25)
         self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
