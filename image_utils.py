@@ -52,6 +52,12 @@ def normalize_img(image):
     else:
         return image/255.
 
+def reduce_mean_(batches):
+    
+    means = np.mean(batches, axis=0)
+    return batches - means
+
+
 
 def color_mode_transfer(image, mode):
     """Transform the color mode of image
