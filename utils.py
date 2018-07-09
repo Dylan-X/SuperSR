@@ -9,6 +9,8 @@ import numpy as np
 import tensorflow as tf
 
 # psnr loss definition:
+
+
 def PSNR(y_true, y_pred):
     """
     PSNR is Peek Signal to Noise Ratio, which is similar to mean squared error.
@@ -20,21 +22,27 @@ def PSNR(y_true, y_pred):
     However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
     Thus we remove that component completely and only compute the remaining MSE component.
     """
-    return -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
+    if K.max(y_true) > 1.:
+        return 48.1308036087-10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
+    else:
+        return -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
+
 
 def psnr(y_true, y_pred):
     assert y_true.shape == y_pred.shape, "Cannot calculate PSNR. Input shapes not same." \
                                          " y_true shape = %s, y_pred shape = %s" % (str(y_true.shape),
-                                                                                   str(y_pred.shape))
-
-    return -10. * np.log10(np.mean(np.square(y_pred - y_true)))
-
+                                                                                    str(y_pred.shape))
+    if np.max(y_true) > 1.:
+        return 48.1308036087-10. * np.log10(np.mean(np.square(y_pred - y_true)))
+    else:
+        return -10. * np.log10(np.mean(np.square(y_pred - y_true)))
 
 
 """
 copied from : 
 https://github.com/twairball/keras-subpixel-conv
 """
+
 
 def SubpixelConv2D(input_shape, scale=4, id=1):
     """
@@ -60,7 +68,4 @@ def SubpixelConv2D(input_shape, scale=4, id=1):
     def subpixel(x):
         return tf.depth_to_space(x, scale)
 
-
-    return Lambda(subpixel, output_shape=subpixel_shape, name='subpixel_layer%d'%(id))
-
-
+    return Lambda(subpixel, output_shape=subpixel_shape, name='subpixel_layer%d' % (id))
