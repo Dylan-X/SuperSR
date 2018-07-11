@@ -107,7 +107,7 @@ class BaseSRModel(object):
             self.create_model()
 
         # adam = optimizers.Nadam()
-        adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8, decay=5e-6)
+        adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8)
         self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
 
         callback_list = []
@@ -124,7 +124,7 @@ class BaseSRModel(object):
         self.model.fit_generator(tr_gen,
                                  steps_per_epoch=num_train // batch_size + 1, epochs=nb_epochs, callbacks=callback_list,
                                  validation_data=val_gen,
-                                 validation_steps=num_val // batch_size + 1, use_multiprocessing=multiprocess, workers=4)
+                                 validation_steps=num_val // batch_size + 1, use_multiprocessing=multiprocess, workers=4, verbose=1)
         return self.model
 
 
