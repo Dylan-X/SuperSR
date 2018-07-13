@@ -14,7 +14,7 @@ import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
-from utils import psnr
+from .utils import psnr
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}

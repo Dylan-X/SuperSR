@@ -10,7 +10,7 @@ import os
 import sys
 import h5py
 import numpy as np
-from image_utils import normalize_img, reduce_mean_
+from .image_utils import normalize_img, reduce_mean_
 
 
 ############################################
