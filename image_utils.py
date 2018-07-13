@@ -14,7 +14,7 @@ import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
-from utils import psnr
+from SuperSR.utils import psnr
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
@@ -595,7 +595,7 @@ def your_func(image, **kargs):
 
 
 def main():
-    from Flow import image_flow_h5, save_h5
+    from SuperSR.Flow import image_flow_h5, save_h5
     # generate and save data to h5 file.
     image_dir = "../Dataset/DIV2K_valid_HR"  # "./test_image/"
     h5path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5" # "./test.h5" 

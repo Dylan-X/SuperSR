@@ -10,7 +10,7 @@ import os
 import sys
 import h5py
 import numpy as np
-from image_utils import normalize_img, reduce_mean_
+from SuperSR.image_utils import normalize_img, reduce_mean_
 
 
 ############################################
@@ -199,7 +199,7 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                                ) if normalize else batches
                 batches = list(map(reduce_mean_, batches)) if reduce_mean else batches
                 
-                yield tuple(batches)
+                yield (batches[0], [batches[i] for i in range(1,len(batches))])
 
 
 """
