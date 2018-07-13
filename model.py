@@ -120,7 +120,9 @@ class BaseSRModel(object):
 
         num_stage = max([len(x) for x in [learning_rate, nb_epochs] if isinstance(x, (list, tuple))])
         num_stage = 1 if not num_stage else num_stage
+
         for s in range(num_stage):
+            print("Stage %d ------ ..."%(s))
             lr = learning_rate if isinstance(learning_rate, float) else learning_rate[s]
             ep = nb_epochs if isinstance(nb_epochs, int) else nb_epochs[s]
             # adam = optimizers.Nadam()
