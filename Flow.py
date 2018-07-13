@@ -10,7 +10,7 @@ import os
 import sys
 import h5py
 import numpy as np
-from SuperSR.image_utils import normalize_img, reduce_mean_
+from image_utils import normalize_img, reduce_mean_
 
 
 ############################################
@@ -139,6 +139,20 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
             if count >= epoch:
                 break
 
+def _multidata_util(index, batches):
+    f_b = []
+    for i, tag in enumerate(index):
+        if isinstance(tag, (tuple, list)):
+            f_b.append([])
+            for j, subtag in enumerate(tag):
+                if isinstance(subtag, (tuple, list)):
+                    raise ValueError("Currently we only support two level embedding...")
+                else:
+                    f_b[i].append(batches[i+j])
+        else:
+            f_b.append(batches[i])
+    return tuple(f_b)
+
 
 def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, normalize=False, reduce_mean=False):
     """Image flow from h5 file.
@@ -162,8 +176,9 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                 Whether generate batches in loop. 
             epoch: Int or None.
                 If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
-            index: Tuple of the index, defines the index of wanted datasets. e.g. (0,2), means we want to yield the first and third dataset in h5 file. If None, yield all datasets. #FIXME
-            normalize: Bool, whether normalize image data or not. We only support image in 8-bit numpy array currently. #FIXME
+            index: Tuple or List of the index, defines the batch you want to yield.
+                ("lr", "hr", "sr") : return the lr, hr and sr batch in tuple.
+                (["lr_1","lr_2"], ["hr1", "hr2"]) : return two targets contains multiple batches. Used for multi-inputs and multi-outputs model in keras.
             reduce_mean: Bool, whether subtract the mean value of RGB of batch.
 
         Yields:
@@ -174,10 +189,20 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                     Raises:
             Warning: If loop is True and epoch is None, a warning will be occurred because it will be a dead loop.
     """
+    f_keys = []
+    def _get_all_keys_(index):
+        for i in index:
+            if isinstance(i, (tuple, list)):
+                _get_all_keys_(i)
+            else:
+                f_keys.append(i)
+    if index:
+        _get_all_keys_(index)
+
     with h5py.File(h5_path, 'r') as hf:
         keys = [key for key in hf.keys()]
         if 'num_blocks' in keys:
-            keys = list(index) if index else [
+            keys = f_keys if index else [
                 key for key in keys if key != 'num_blocks']
         else:
             raise Exception("The last key of h5File should be \"num_blocks\"!")
@@ -199,7 +224,8 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
                                ) if normalize else batches
                 batches = list(map(reduce_mean_, batches)) if reduce_mean else batches
                 
-                yield (batches[0], [batches[i] for i in range(1,len(batches))])
+                yield _multidata_util(index, batches)
+
 
 
 """
@@ -224,3 +250,13 @@ The function below reads data from h5 directly to numpy array. It is deprecated 
 #     return tuple(data)
 
 # TODO(mulns): Add image_flow_dir and save_dir function.
+
+
+def main():
+    batches = [np.eye(2), np.eye(3), np.eye(4), np.eye(5)]
+    index=("lr", ["lr","hr"], ["sr"])
+    f_b = _multidata_util(index, batches)
+    print(len(f_b), f_b[0], len(f_b[1]), len(f_b[2]))
+
+if __name__ == '__main__':
+    main()
