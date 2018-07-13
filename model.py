@@ -7,11 +7,11 @@ from keras.utils.np_utils import to_categorical
 import keras.callbacks as callbacks
 import keras.optimizers as optimizers
 from keras import backend as K
-from SuperSR.advanced import TensorBoardBatch
+from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
-from SuperSR.utils import PSNR, psnr, SubpixelConv2D
-from SuperSR.image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, color_mode_transfer
-from SuperSR.Flow import image_flow_h5
+from utils import PSNR, psnr, SubpixelConv2D
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, color_mode_transfer
+from Flow import image_flow_h5
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from PIL import Image
