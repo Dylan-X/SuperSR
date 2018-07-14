@@ -537,7 +537,9 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
             "Scale should be an integer or a list(tuple) of integers.")
     return data
 
-# If you want to use funtion in Flow.py to save and flow data
+
+
+# If you want to use function in Flow.py to save and flow data
 # Please follow these rules!
 
 
@@ -592,6 +594,7 @@ def your_func(image, **kargs):
 #     for i, sc in enumerate(scale):
 #         data["lr_%dX" % (sc)] = blocks[i+1]
 #     return data
+
 
 
 def main():
