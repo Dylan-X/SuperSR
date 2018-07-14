@@ -155,7 +155,7 @@ def _multidata_util(index, batches):
     return tuple(f_b)
 
 
-def image_flow_h5_(h5_path, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, normalize=False, reduce_mean=False):
+def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, normalize=False, reduce_mean=False):
     """Image flow from h5 file.
 
         Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We crash the data with big_batch_size into memory and generate batch during every big batch period. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs  (data, label) per time.
