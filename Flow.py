@@ -268,7 +268,7 @@ class _FlowData_(object):
     def __init__(self, path):
         if os.path.isdir(path):
             self._from_dir_ = True
-        elif os.path.isfile(path) and path.split(".")[-1] == "h5":
+        elif path.split(".")[-1] == "h5":
             self._from_h5_ = True
         else:
             raise NotImplementedError(
@@ -402,7 +402,8 @@ class _FlowData_(object):
                     hf[key][length_dst[key]: length_dst[key] + len(value)] = value
                     length_dst[key] += len(value)
             keys = list(hf.keys())
-            hf.create_dataset("num_blocks", data=length_dst[keys[0]])
+            if not "num_blocks" in keys:
+                hf.create_dataset("num_blocks", data=length_dst[keys[0]])
             print("\n Length of different datasets are : " + str(length_dst))
 
     def before_save(self, image_path):
@@ -422,6 +423,13 @@ class _FlowData_(object):
         """
         image = np.array(Image.open(image_path))
         return image
+
+    def get_num_blocks(self):
+        if self._from_h5_:
+            with h5py.File(self.flow_path, 'r') as hf:
+                return int(hf["num_blocks"].value)
+        else:
+            raise NotImplementedError("Currently only support h5 file..")
 
 
 class SRFlowData(_FlowData_):
@@ -488,7 +496,7 @@ class SRFlowData(_FlowData_):
             else:
                 raise ValueError(
                     "Wrong length of batches, if you want to process hr_batch differently, rewrite this funciton.")
-            return tuple([lr_batch, hr_batch])
+            return tuple([lr_batch/255., hr_batch/255.])
 
         else:
             raise ValueError(
@@ -525,7 +533,7 @@ class SRFlowData(_FlowData_):
                 raise ValueError(
                     "Slice mode should be in 'random', 'normal', 'rr'.")
 
-            return {'hr', blocks}
+            return {'hr': blocks}
 
         else:
             raise ValueError(
