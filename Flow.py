@@ -140,14 +140,16 @@ def index_generator(N, batch_size, keep_batch_size=False, shuffle=True, seed=Non
             if count >= epoch:
                 break
 
-def _multidata_util(index, batches):
+
+def _multidata_util_(index, batches):
     f_b = []
     for i, tag in enumerate(index):
         if isinstance(tag, (tuple, list)):
             f_b.append([])
             for j, subtag in enumerate(tag):
                 if isinstance(subtag, (tuple, list)):
-                    raise ValueError("Currently we only support two level embedding...")
+                    raise ValueError(
+                        "Currently we only support two level embedding...")
                 else:
                     f_b[i].append(batches[i+j])
         else:
@@ -191,6 +193,7 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
             Warning: If loop is True and epoch is None, a warning will be occurred because it will be a dead loop.
     """
     f_keys = []
+
     def _get_all_keys_(index):
         for i in index:
             if isinstance(i, (tuple, list)):
@@ -223,11 +226,10 @@ def image_flow_h5(h5_path, batch_size, keep_batch_size=False, big_batch_size=100
 
                 batches = list(map(normalize_img, batches)
                                ) if normalize else batches
-                batches = list(map(reduce_mean_, batches)) if reduce_mean else batches
-                
-                yield _multidata_util(index, batches)
+                batches = list(map(reduce_mean_, batches)
+                               ) if reduce_mean else batches
 
-
+                yield _multidata_util_(index, batches)
 
 
 """
@@ -254,25 +256,34 @@ The function below reads data from h5 directly to numpy array. It is deprecated 
 # TODO(mulns): Add image_flow_dir and save_dir function.
 
 
-
-class FlowData(object):
+class _FlowData_(object):
     """This is a base class of data_flow.
-    
+
          You can inherent your own class with specific processing function. before_save function is the function called before saving blocks into h5 file or directory, before_flow function is the function called before flowing data into network.
-    
+
         Attributes:
             path: The path to h5 file or directory, as save path and flow path.
     """
+
     def __init__(self, path):
         if os.path.isdir(path):
             self._from_dir_ = True
-        elif os.path.isfile(path) and path.split(".")[-1] == "h5":
+        elif path.split(".")[-1] == "h5":
             self._from_h5_ = True
         else:
-            raise NotImplementedError("Currently only support flow from directory and h5 file.")
+            raise NotImplementedError(
+                "Currently only support flow from directory and h5 file.")
         self.flow_path = path
-    
-    def flow_from_h5(self, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, **kargs):
+
+    def flow_from_h5(self, 
+                     batch_size, 
+                     keep_batch_size=False, 
+                     big_batch_size=1000, 
+                     shuffle=True, 
+                     seed=None, 
+                     loop=True, 
+                     epoch=None, 
+                     index=None):
         """Image flow from h5 file.
 
             Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We crash the data with big_batch_size into memory and generate batch during every big batch period. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs (data, label) per time.
@@ -293,18 +304,19 @@ class FlowData(object):
                 epoch: Int or None.
                     If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
                 index: Tuple or List of the index, defines the batch you want to yield.
+<<<<<<< HEAD
                     ("lr", "hr", "sr") : return the lr, hr and sr batch in tuple.
                     (["lr_1","lr_2"], ["hr1", "hr2"]) : return two targets contains multiple batches. Used for multi-inputs and multi-outputs model in keras.
                 **kargs:
                     See before_flow for details...
+=======
+>>>>>>> 29675d28675f3329394a176d46dca883c25d0bfd
 
             Yields:
                 Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]). The order is decided by index.
 
             Raises:
                 Exception: An error occured when h5 file has no key named "num_blocks".
-                        Raises:
-                Warning: If loop is True and epoch is None, a warning will be occurred because it will be a dead loop.
         """
 
         with h5py.File(self.flow_path, 'r') as hf:
@@ -313,7 +325,8 @@ class FlowData(object):
                 keys = index if index else [
                     key for key in keys if key != 'num_blocks']
             else:
-                raise Exception("The last key of h5File should be \"num_blocks\"!")
+                raise Exception(
+                    "The last key of h5File should be \"num_blocks\"!")
             N = int(hf['num_blocks'].value)
 
             big_batch_size = N if not big_batch_size else big_batch_size
@@ -321,32 +334,32 @@ class FlowData(object):
             big_batch_gen = index_generator(
                 N, big_batch_size, keep_batch_size=False, shuffle=False, seed=seed, loop=loop, epoch=epoch)
             for big_batch_index, current_big_batch_size in big_batch_gen:
-                big_batch = [hf[key][[i for i in big_batch_index]] for key in keys]
+                big_batch = [hf[key][[i for i in big_batch_index]]
+                             for key in keys]
                 batch_gen = index_generator(current_big_batch_size, batch_size,
                                             keep_batch_size=keep_batch_size, shuffle=shuffle, seed=seed, loop=False)
                 for batch_index, _ in batch_gen:
 
                     batches = [data[batch_index] for data in big_batch]
-                    fb = self.before_flow(batches, **kargs)
-                    assert isinstance(fb, tuple), "before_flow should return a tuple."
+                    fb = self.before_flow(batches)
+                    assert isinstance(
+                        fb, tuple), "before_flow should return a tuple."
                     yield fb
 
-        
     def before_flow(self, batches):
         """Function called before flowing data.
-        
+
             This function recieve a list of diff batches to be processed. Each batch is in numpy array or a list of numpy array. You should complete this function and return a tuple instance.
-        
+
             Args:
                 batches: List, different batches in numpy array or list of numpy array.
-        
+
             Returns:
                 Tuple of more than 2 elements.
         """
         return batches
 
-
-    def _data_generator(self, image_dir, **kargs):
+    def _data_generator_(self, image_dir):
         """Generate data from image using python generator, one image a time.
 
             Specify a preprocessing function, we do that func on all images in directory. One time a image.
@@ -363,7 +376,7 @@ class FlowData(object):
         # print(total_num)
         for filename in sorted(os.listdir(image_dir)):
             count_num += 1
-            data = self.before_save(os.path.join(image_dir, filename), **kargs)
+            data = self.before_save(os.path.join(image_dir, filename))
             # print(count_num)
             # verbose
             if not count_num % 2:
@@ -371,10 +384,8 @@ class FlowData(object):
                     count_num, total_num-count_num))
 
             yield count_num, data
-        
 
-
-    def save_to_h5(self, image_dir, **kargs):
+    def save_to_h5(self, image_dir):
         """Save data into h5 file based on data_generator().
 
             We will use your function to generate the data of images in image_dir, and save them to save_path. We save them one image per time, so this func support Big Data case. Data generated from image should be in a dictionary, whose keys are used to create name of dataset in h5File. The last dataset of H5File is called "num_blocks", defines the number of data in each dataset.
@@ -386,7 +397,7 @@ class FlowData(object):
         with h5py.File(self.flow_path, 'a') as hf:
             length_dst = {}
             shape_dst = {}
-            for _, data in self._data_generator(image_dir, **kargs):
+            for _, data in self._data_generator_(image_dir):
                 for key, value in data.items():
                     if not (key in list(hf.keys())):
                         shape_dst[key] = tuple(list(value.shape)[1:])
@@ -398,125 +409,204 @@ class FlowData(object):
                     hf[key][length_dst[key]: length_dst[key] + len(value)] = value
                     length_dst[key] += len(value)
             keys = list(hf.keys())
-            hf.create_dataset("num_blocks", data=length_dst[keys[0]])
+            if not "num_blocks" in keys:
+                hf.create_dataset("num_blocks", data=length_dst[keys[0]])
             print("\n Length of different datasets are : " + str(length_dst))
-    
+
     def before_save(self, image_path):
         """Function called before saving data.
-        
+
             This function recieve a string of image_path, returns a dictionary whose key is the name of dataset or directory. You should implement this function, to process a single image.
-        
+
             Args:
                 image_path: String.
                     Path to image.
-        
+
             Returns:
                 Dictionary: key is the name of dataset and directory. value is the data to be saved, should be in numpy array.
-        
+
             Raises:
                 IOError: An error occured when Discription
         """
         image = np.array(Image.open(image_path))
         return image
 
+    def get_num_blocks(self):
+        if self._from_h5_:
+            with h5py.File(self.flow_path, 'r') as hf:
+                return int(hf["num_blocks"].value)
+        else:
+            raise NotImplementedError("Currently only support h5 file..")
 
-class SRFlowData(FlowData):
+
+class SRFlowData(_FlowData_):
     """Super-Resolution base data flowing class.
-    
+
         This class is used for common flowing data in Super-Resolution problem. We save blocks sliced from origin-image and save them to h5 file or directory. And flow data-pairs in tuple : (lr-blocks, hr-blocks).
-    
+
         Attributes:
-            scale: Int.
+            h5path: String.
+                Path to h5 files.
+            bf_scale: Int.
                 Downsample scaling_factor.
-            lr_shape: Int.
+            bf_lr_shape: Int.
                 0 to downsample.
                 1 to downsample and upsample to size of origin-image.
-            slice_mode: String.
+            bs_slice_mode: String.
                 "random" to slice random from origin-image.
                 "normal" to slice without merging param.
                 "rr" to slice with remove redundance.
-            nb_blocks: Int.
+            bs_block_size: Int.
+                Value of width and height of blocks.
+            bs_stride: Int.
+                Stride when slicing blocks.
+            bs_nb_blocks: Int.
                 If slice_mode is "random", nb_blocks defines the number of blocks sliced from origin-image.
-            threshold: Int.
+            bs_threshold: Int.
                 If slice_mode is "rr", threshold defines the threshold of mse value to discard redundant blocks.
-            
+
     """
-    def __init__(self, h5path):
+
+    def __init__(self,
+                 h5path,
+                 bf_scale=None,
+                 bf_lr_shape=None,
+                 bs_slice_mode="normal",
+                 bs_block_size=48,
+                 bs_stride=24,
+                 bs_nb_blocks=None,
+                 bs_threshold=None):
         super(SRFlowData, self).__init__(h5path)
+        self.scale = bf_scale
+        self.lr_shape = bf_lr_shape
+        self.slice_mode = bs_slice_mode
+        self.block_size = bs_block_size
+        self.stride = bs_stride
+        self.nb_blocks = bs_nb_blocks
+        self.threshold = bs_threshold
 
-    def before_flow(self, batches, **kargs):
-        """**kargs : scale, lr_shape"""
+    def before_flow(self, batches):
 
-        scale = kargs["scale"] if "scale" in kargs else None
-        lr_shape = kargs["lr_shape"] if "lr_shape" in kargs else None
-        
-        if scale and lr_shape:
+        scale = self.scale
+        lr_shape = self.lr_shape
 
+        if scale and lr_shape is not None:
+
+<<<<<<< HEAD
             if len(batches)==2:
                 print("Please make sure u are reading lr and hr batch from h5 file.")
+=======
+            if len(batches) == 2:
+                # print("Please make sure u are reading lr and hr batch from h5 file.")
+>>>>>>> 29675d28675f3329394a176d46dca883c25d0bfd
                 return tuple(batches)
-            elif len(batches)==1:
-                print("Please make sure u are reading hr batch from h5 file.")
+            elif len(batches) == 1:
+                # print("Please make sure u are reading hr batch from h5 file.")
                 hr_batch = batches[0]
-                lr_batch = np.array(hr2lr_batch(hr_batch, scale=scale, shape=lr_shape, keepdim=True))
+                lr_batch = np.array(hr2lr_batch(
+                    hr_batch, scale=scale, shape=lr_shape, keepdim=True))
             else:
-                raise ValueError("Wrong length of batches, if you want to process hr_batch differently, rewrite this funciton.")
-            return tuple([lr_batch, hr_batch])
-        
-        else:
-            raise ValueError("When calling flow_from_h5, scale and lr_shape should be specified.")
-    
-    def before_save(self, image_path, **kargs):
-        """**kargs : slice_mode, block_size, stride, nb_blocks, threshold"""
+                raise ValueError(
+                    "Wrong length of batches, if you want to process hr_batch differently, rewrite this funciton.")
+            return tuple([lr_batch/255., hr_batch/255.])
 
-        slice_mode = kargs["slice_mode"] if "slice_mode" in kargs else None
-        block_size = kargs["block_size"] if "block_size" in kargs else None
-        stride = kargs["stride"] if "stride" in kargs else None
+        else:
+            raise ValueError(
+                "When calling flow_from_h5, scale and lr_shape should be specified.")
+
+    def before_save(self, image_path):
+
+        slice_mode = self.slice_mode
+        block_size = self.block_size
+        stride = self.stride
+        nb_blocks = self.nb_blocks
+        threshold = self.threshold
+
         if slice_mode:
             img = super(SRFlowData, self).before_save(image_path)
-            if slice_mode=="random":
-                nb_blocks = kargs["nb_blocks"] if "nb_blocks" in kargs else None
+            if slice_mode == "random":
                 if nb_blocks:
-                    blocks = slice_random(img, size=block_size, stride=stride, nb_blocks=nb_blocks, to_array=True)
+                    blocks = slice_random(
+                        img, size=block_size, stride=stride, nb_blocks=nb_blocks, to_array=True)
                 else:
-                    raise ValueError("If slice_mode is random, nb_blocks should be specified in Integer.")
-            elif slice_mode=="normal":
+                    raise ValueError(
+                        "If slice_mode is random, nb_blocks should be specified in Integer.")
+            elif slice_mode == "normal":
                 blocks = slice_normal(
-                        img, size=block_size, stride=stride, to_array=True, merge=False)
-            elif slice_mode=="rr":
-                threshold = kargs["threshold"] if "threshold" in kargs else None
+                    img, size=block_size, stride=stride, to_array=True, merge=False)
+            elif slice_mode == "rr":
                 if threshold:
                     blocks = slice_rr(
-                        img, size=block_size, stride=stride, threshold=threshold)
+                        img, size=block_size, stride=stride, threshold=threshold, to_array=True)
                 else:
                     raise ValueError(
                         "If slice_mode is rr which means remove redundance, threshold should be specified in Integer.")
             else:
-                raise ValueError("Slice mode should be in 'random', 'normal', 'rr'.")
+                raise ValueError(
+                    "Slice mode should be in 'random', 'normal', 'rr'.")
 
-            return {'hr', blocks}
+            return {'hr': blocks}
 
         else:
-            raise ValueError("When calling save_to_h5, slice_mode should be specified, which can be 'random', 'normal', 'rr'. So as stride and block_size.")
+            raise ValueError(
+                "When calling save_to_h5, slice_mode should be specified, which can be 'random', 'normal', 'rr'. So as stride and block_size.")
+
+
+class MultiDataSRFLowData(SRFlowData):
+
+    def __init__(self,
+                 h5path,
+                 bf_lr_shape=None,
+                 bf_index=(2, [1, 1]),
+                 bs_slice_mode="normal",
+                 bs_block_size=48,
+                 bs_stride=24,
+                 bs_nb_blocks=None,
+                 bs_threshold=None):
+        super(MultiDataSRFLowData, self).__init__(h5path=h5path,
+                                                  bf_scale=None,
+                                                  bf_lr_shape=bf_lr_shape,
+                                                  bs_slice_mode=bs_slice_mode,
+                                                  bs_block_size=bs_block_size,
+                                                  bs_stride=bs_stride,
+                                                  bs_nb_blocks=bs_nb_blocks,
+                                                  bs_threshold=bs_threshold)
+        self.index = bf_index
+
+    def before_flow(self, batches):
+
+        lr_shape = self.lr_shape
+        index = self.index
+
+        if lr_shape is not None:
+
+            hr_batch = batches[0]
+            f_keys = []
+
+            def _get_all_keys_(index):
+                for i in index:
+                    if isinstance(i, (tuple, list)):
+                        _get_all_keys_(i)
+                    else:
+                        assert isinstance(
+                            i, int), "value in index should be Integer."
+                        f_keys.append(i)
+            if index:
+                _get_all_keys_(index)
+
+            _batches_ = []
+            for scale in f_keys:
+                if scale == 1:
+                    _batches_.append(hr_batch)
+                else:
+                    _batches_.append(np.array(hr2lr_batch(
+                        hr_batch, scale=scale, shape=lr_shape, keepdim=True)))
+
+            return _multidata_util_(index, _batches_)
+
+        else:
+            raise ValueError(
+                "When calling flow_from_h5, lr_shape should be specified.")
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-def main():
-    batches = [np.eye(2), np.eye(3), np.eye(4), np.eye(5)]
-    index=("lr", ["lr","hr"], ["sr"])
-    f_b = _multidata_util(index, batches)
-    print(len(f_b), f_b[0], len(f_b[1]), len(f_b[2]))
-
-if __name__ == '__main__':
-    main()
