@@ -275,11 +275,9 @@ class FlowData(object):
     def flow_from_h5(self, batch_size, keep_batch_size=False, big_batch_size=1000, shuffle=True, seed=None, loop=True, epoch=None, index=None, **kargs):
         """Image flow from h5 file.
 
-            Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We crash the data with big_batch_size into memory and generate batch during every big batch period. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs  (data, label) per time.
+            Using python generator to generate data pairs from h5 file. In case of the data might has big size causing OOM error, we use this method to generate data one batch a time. By the way, we use big batch to accelerate the IO speed, because reading from h5 file frequently is too slow. We crash the data with big_batch_size into memory and generate batch during every big batch period. The index is used to specify which data you want to yield. If you are using keras.Model.fit_generator(), you should yield a batch of data pairs (data, label) per time.
 
             Args:
-                h5_path: String.
-                    The path of h5 file.
                 batch_size: Int.
                     The size of each batch.
                 keep_batch_size: Bool.
@@ -297,8 +295,8 @@ class FlowData(object):
                 index: Tuple or List of the index, defines the batch you want to yield.
                     ("lr", "hr", "sr") : return the lr, hr and sr batch in tuple.
                     (["lr_1","lr_2"], ["hr1", "hr2"]) : return two targets contains multiple batches. Used for multi-inputs and multi-outputs model in keras.
-                preprocess_func: Function.
-                    This funciton will be called before the batches are yield, it recieve a list of batches and should return a tuple instance.
+                **kargs:
+                    See before_flow for details...
 
             Yields:
                 Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]). The order is decided by index.
@@ -455,7 +453,7 @@ class SRFlowData(FlowData):
         if scale and lr_shape:
 
             if len(batches)==2:
-                print("Please make sure u are reading hr and lr batch from h5 file.")
+                print("Please make sure u are reading lr and hr batch from h5 file.")
                 return tuple(batches)
             elif len(batches)==1:
                 print("Please make sure u are reading hr batch from h5 file.")
