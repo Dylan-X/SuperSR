@@ -122,7 +122,7 @@ class BaseSRModel(object):
         num_stage = 1 if not num_stage else num_stage
 
         for s in range(num_stage):
-            print("Stage %d ------ ..."%(s))
+            print("Stage %d ------ ..."%(s+1))
             lr = learning_rate if isinstance(learning_rate, float) else learning_rate[s]
             ep = nb_epochs if isinstance(nb_epochs, int) else nb_epochs[s]
             # adam = optimizers.Nadam()
@@ -132,7 +132,7 @@ class BaseSRModel(object):
             self.model.fit_generator(tr_gen,
                                     steps_per_epoch=num_train // batch_size + 1, epochs=ep, callbacks=callback_list,
                                     validation_data=val_gen,
-                                    validation_steps=num_val // batch_size + 1, workers=4, pickle_safe=True)
+                                    validation_steps=num_val // batch_size + 1)
         return self.model
 
 
@@ -189,10 +189,10 @@ class BaseSRModel(object):
         sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)*255.
 
         if verbose == 1:
-            print('PSNR is %f' % (psnr(sr_img/255., hr_img/255.)))
+            print('PSNR is %f' % (psnr(sr_img, hr_img)))
         if save:
             misc.imsave('./example/%s_SR.jpg' % (save_name), sr_img)
-        return (hr_img, lr_img, sr_img), psnr(sr_img/255., hr_img/255.)
+        return (hr_img, lr_img, sr_img), psnr(sr_img, hr_img)
 
     def evaluate_batch(self, test_path, mode="auto", scale=4, lr_shape=1, verbose=0, return_list=False, **kargs):
         """Evaluate the psnr of all images in directory. 
@@ -449,52 +449,3 @@ class EDSR(BaseSRModel):
 
 
 
-def main():
-    # change to yours. See image_utils.py for details.
-    trainH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_tr_diff_2348X.h5"
-    valH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5"
-
-    # Generator of train data from h5 file.
-    tr_gen = image_flow_h5(trainH5_path, batch_size=16,
-                           big_batch_size=5000, shuffle=True, index=("lr_2X", "hr"), normalize=True)
-    val_gen = image_flow_h5(
-        valH5_path, batch_size=16, big_batch_size=5000,
-        shuffle=False, index=("lr_2X", "hr"), normalize=True)
-
-    # Model .
-    srcnn = SRCNN("div2k", input_size=(48, 48, 3))
-    srcnn.create_model(load_weights=True)  # True if weights already exists.
-    # edsr = EDSR("div2k_2X", (24,24,3), scale=2)
-    # edsr.create_model(load_weights=False)
-
-    # # Train part.
-    # edsr.fit(tr_gen, val_gen, num_train=800000,
-    #          num_val=100000, batch_size=16, loss="mae")
-
-    # Evaluate part.(Only one sample here)
-    imgs, _ = srcnn.evaluate(
-        "./test_image/butterfly_GT.bmp", mode="auto", scale=4, lr_shape=1)
-
-    # Save the result.
-    misc.imsave("./example/butt_sr_2X.jpg", imgs[1].squeeze())
-    misc.imsave("./example/butt_hr.jpg", imgs[0].squeeze())
-    misc.imsave("./example/butt_lr_2X.jpg", misc.imresize(imgs[0].squeeze(), 1/3))
-
-    # # Evaluate images from a directory and calculate the average psnr.
-    psnr, PSNR_List = srcnn.evaluate_batch(
-        "./test_image/set5", mode="auto", scale=3, lr_shape=1, stride_scale=0.5, return_list=True)
-    print("Average psnr of this Directory is ", psnr)
-    # Average psnr of this Directory(100 images from DIV2K Validation dataset) is  27.549315894072866
-
-    # Plot the sample and psnr.
-    plt.subplot(131)
-    plt.imshow(np.uint8(imgs[0].squeeze()))
-    plt.subplot(132)
-    plt.imshow(np.uint8(imgs[1].squeeze()))
-    plt.subplot(133)
-    plt.plot(np.arange(len(PSNR_List)), PSNR_List)
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()
