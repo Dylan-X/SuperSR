@@ -122,7 +122,7 @@ class BaseSRModel(object):
         num_stage = 1 if not num_stage else num_stage
 
         for s in range(num_stage):
-            print("Stage %d ------ ..."%(s))
+            print("Stage %d ------ ..."%(s+1))
             lr = learning_rate if isinstance(learning_rate, float) else learning_rate[s]
             ep = nb_epochs if isinstance(nb_epochs, int) else nb_epochs[s]
             # adam = optimizers.Nadam()
@@ -132,7 +132,7 @@ class BaseSRModel(object):
             self.model.fit_generator(tr_gen,
                                     steps_per_epoch=num_train // batch_size + 1, epochs=ep, callbacks=callback_list,
                                     validation_data=val_gen,
-                                    validation_steps=num_val // batch_size + 1, workers=4, pickle_safe=True)
+                                    validation_steps=num_val // batch_size + 1)
         return self.model
 
 
@@ -189,10 +189,10 @@ class BaseSRModel(object):
         sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)*255.
 
         if verbose == 1:
-            print('PSNR is %f' % (psnr(sr_img/255., hr_img/255.)))
+            print('PSNR is %f' % (psnr(sr_img, hr_img)))
         if save:
             misc.imsave('./example/%s_SR.jpg' % (save_name), sr_img)
-        return (hr_img, lr_img, sr_img), psnr(sr_img/255., hr_img/255.)
+        return (hr_img, lr_img, sr_img), psnr(sr_img, hr_img)
 
     def evaluate_batch(self, test_path, mode="auto", scale=4, lr_shape=1, verbose=0, return_list=False, **kargs):
         """Evaluate the psnr of all images in directory. 
