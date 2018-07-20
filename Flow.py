@@ -304,13 +304,10 @@ class _FlowData_(object):
                 epoch: Int or None.
                     If loop, epoch defines the number of loops. If None, this generator will generate batch permanantly.
                 index: Tuple or List of the index, defines the batch you want to yield.
-<<<<<<< HEAD
                     ("lr", "hr", "sr") : return the lr, hr and sr batch in tuple.
                     (["lr_1","lr_2"], ["hr1", "hr2"]) : return two targets contains multiple batches. Used for multi-inputs and multi-outputs model in keras.
                 **kargs:
                     See before_flow for details...
-=======
->>>>>>> 29675d28675f3329394a176d46dca883c25d0bfd
 
             Yields:
                 Tuple of batches from diff datasets. Each element is a numpy array in shape of (current_batch_size, height, width [, channel]). The order is decided by index.
@@ -492,13 +489,9 @@ class SRFlowData(_FlowData_):
 
         if scale and lr_shape is not None:
 
-<<<<<<< HEAD
-            if len(batches)==2:
-                print("Please make sure u are reading lr and hr batch from h5 file.")
-=======
             if len(batches) == 2:
                 # print("Please make sure u are reading lr and hr batch from h5 file.")
->>>>>>> 29675d28675f3329394a176d46dca883c25d0bfd
+
                 return tuple(batches)
             elif len(batches) == 1:
                 # print("Please make sure u are reading hr batch from h5 file.")
