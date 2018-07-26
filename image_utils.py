@@ -14,7 +14,7 @@ import h5py
 import numpy as np
 # from scipy.misc import imread, imresize, imsave
 import matplotlib.pyplot as plt
-from utils import psnr
+from .utils import psnr
 
 MODE = {"BICUBIC": Image.BICUBIC,
         "NEAREST": Image.NEAREST, "BILINEAR": Image.BILINEAR}
@@ -29,6 +29,21 @@ You can also add your_func to generate the data you want, and use function in Fl
 ############################################
 # DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING
 ############################################
+
+def plot_gallery(title, images, n_col=3, n_row=4, image_shape=(48,48)):
+    plt.figure(figsize=(2. * n_col, 2.26 * n_row))
+    plt.suptitle(title, size=16)
+    for i, comp in enumerate(images):
+        plt.subplot(n_row, n_col, i + 1)
+        vmax = max(comp.max(), -comp.min())
+        plt.imshow(comp.reshape(image_shape), cmap='gray',
+                   interpolation='nearest',
+                   vmin=-vmax, vmax=vmax)
+        plt.xticks(())
+        plt.yticks(())
+    plt.subplots_adjust(0.01, 0.05, 0.99, 0.93, 0.04, 0.)
+    plt.savefig("./%s.jpg" % title)
+    plt.show()
 
 def center_crop(img, padding):
     img = np.array(img)
@@ -537,7 +552,9 @@ def hrlr_sliceFirst(image, scale, slice_type, hr_size, hr_stride, lr_shape=0, in
             "Scale should be an integer or a list(tuple) of integers.")
     return data
 
-# If you want to use funtion in Flow.py to save and flow data
+
+
+# If you want to use function in Flow.py to save and flow data
 # Please follow these rules!
 
 
@@ -594,40 +611,4 @@ def your_func(image, **kargs):
 #     return data
 
 
-def main():
-    from Flow import image_flow_h5, save_h5
-    # generate and save data to h5 file.
-    image_dir = "../Dataset/DIV2K_valid_HR"  # "./test_image/"
-    h5path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5" # "./test.h5" 
-    if not os.path.exists(h5path):
-        save_h5(image_dir=image_dir, save_path=h5path,
-                your_func=hrlr_sliceFirst, scale=[2, 3, 4, 8],
-                slice_type=slice_random, hr_size=48, hr_stride=24, lr_shape=0,
-                threshold=None, nb_blocks=1000, mode="auto")
 
-    # Generator of data from h5File.
-    datagen = image_flow_h5(h5path, batch_size=100,
-                            keep_batch_size=False, shuffle=False,
-                            big_batch_size=1000,
-                            index=('hr', 'lr_3X'), loop=False)
-
-    # Visualize the generator. One batch a time.
-    num_data = 0
-    for batches in datagen:
-        imgs = []
-        print(batches[0].shape)
-        num_data += batches[0].shape[0]
-        for batch in batches:
-            imgs.append(batch[10])
-        # print(psnr(imgs[0]/255., imgs[1]/255.))
-        for i in range(len(imgs)):
-            plt.subplot(1, len(imgs), i+1)
-            plt.imshow(imgs[i].squeeze())
-        plt.show()
-    print("Generate ", num_data, "Data")
-    with h5py.File(h5path, 'r') as hf:
-        print("H5 file has ", hf["num_blocks"].value, "Data in Total.")
-
-
-if __name__ == '__main__':
-    main()

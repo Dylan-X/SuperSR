@@ -21,12 +21,17 @@ def PSNR(y_true, y_pred):
     When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
     However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
     Thus we remove that component completely and only compute the remaining MSE component.
-    # """
+
+    """
     # if K.max(y_true) > 1.:
     #     return 48.1308036087-10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
     # else:
     #     return -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
-    return K.switch(K.max(y_true) > 1, 48.1308036087-10. *
+    max_pred = K.max(y_pred)
+    max_true = K.max(y_true)
+    max_val = K.minimum(max_pred, max_true)
+    max_is_255 = max_val > 1
+    return K.switch(max_is_255, 48.1308036087-10. *
              K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.), -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.))
 
 def PSNR_Y(y_true, y_pred):
@@ -45,12 +50,11 @@ def PSNR_Y(y_true, y_pred):
 
 
 
-
 def psnr(y_true, y_pred):
     assert y_true.shape == y_pred.shape, "Cannot calculate PSNR. Input shapes not same." \
                                          " y_true shape = %s, y_pred shape = %s" % (str(y_true.shape),
                                                                                     str(y_pred.shape))
-    if np.max(y_true) > 1.:
+    if np.max(y_true) > 1. and np.max(y_pred) > 1.:
         return 48.1308036087-10. * np.log10(np.mean(np.square(y_pred - y_true)))
     else:
         return -10. * np.log10(np.mean(np.square(y_pred - y_true)))
