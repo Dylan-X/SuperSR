@@ -10,7 +10,7 @@ from keras import backend as K
 from .advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
 from .utils import PSNR, psnr, SubpixelConv2D
-from .image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, color_mode_transfer
+from .image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, rgb2ycbcr
 from .Flow import image_flow_h5
 import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -118,8 +118,11 @@ class BaseSRModel(object):
 
         print('Training model : %s' % (self.model_name))
 
-        num_stage = max([len(x) for x in [learning_rate, nb_epochs] if isinstance(x, (list, tuple))])
-        num_stage = 1 if not num_stage else num_stage
+        # num_stage = max([len(x) for x in [learning_rate, nb_epochs] if isinstance(x, (list, tuple))])
+        num_stage = 1
+        for x in [learning_rate, nb_epochs]:
+            if isinstance(x, (tuple, list)):
+                num_stage = max(num_stage, len(x))
 
         for s in range(num_stage):
             print("Stage %d ------ ..."%(s+1))
@@ -174,8 +177,7 @@ class BaseSRModel(object):
 
         # Read image.
         img = np.array(Image.open(image_path))
-        if mode == "Y":
-            img = self._formulate_(color_mode_transfer(img, "YCbCr")[:, :, 0])
+
         # Slice first.
         hr_block, size_merge = slice_normal(
             img, hr_size, hr_stride, to_array=True, merge=True)
@@ -187,7 +189,9 @@ class BaseSRModel(object):
         hr_img = merge_to_whole(hr_block, size_merge, stride=hr_stride)
         lr_img = hr2lr(hr_img.squeeze(), scale=scale, shape=1)
         sr_img = merge_to_whole(sr_block, size_merge, stride=hr_stride)*255.
-
+        if mode == "Y":
+            hr_img, lr_img, sr_img = list(
+                map(rgb2ycbcr, [hr_img, lr_img, sr_img]))
         if verbose == 1:
             print('PSNR is %f' % (psnr(sr_img, hr_img)))
         if save:
