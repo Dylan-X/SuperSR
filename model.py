@@ -9,7 +9,7 @@ import keras.optimizers as optimizers
 from keras import backend as K
 from advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
-from utils import PSNR, psnr, SubpixelConv2D
+from utils import PSNR, psnr, SubpixelConv2D, PSNR_Y
 from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, color_mode_transfer
 from Flow import image_flow_h5
 import matplotlib.pyplot as plt
@@ -108,11 +108,11 @@ class BaseSRModel(object):
 
         # adam = optimizers.Nadam()
         adam = optimizers.Adam(lr=learning_rate, beta_1=0.9, beta_2=0.999, epsilon=1e-8)
-        self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR])
+        self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR_Y])
 
         callback_list = []
         # callback_list.append(HistoryCheckpoint(history_fn))
-        callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR',
+        callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor='val_PSNR_Y',
                                                        save_best_only=True, mode='max', save_weights_only=True, verbose=2))
         if save_history:
             log_dir = os.path.join(log_dir, self.model_name)
@@ -441,52 +441,4 @@ class EDSR(BaseSRModel):
 
 
 
-def main():
-    # change to yours. See image_utils.py for details.
-    trainH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_tr_diff_2348X.h5"
-    valH5_path = "/media/mulns/F25ABE595ABE1A75/H5File/div2k_RGB_val_diff_2348X.h5"
 
-    # Generator of train data from h5 file.
-    tr_gen = image_flow_h5(trainH5_path, batch_size=16,
-                           big_batch_size=5000, shuffle=True, index=("lr_2X", "hr"), normalize=True)
-    val_gen = image_flow_h5(
-        valH5_path, batch_size=16, big_batch_size=5000,
-        shuffle=False, index=("lr_2X", "hr"), normalize=True)
-
-    # Model .
-    srcnn = SRCNN("div2k", input_size=(48, 48, 3))
-    srcnn.create_model(load_weights=True)  # True if weights already exists.
-    # edsr = EDSR("div2k_2X", (24,24,3), scale=2)
-    # edsr.create_model(load_weights=False)
-
-    # # Train part.
-    # edsr.fit(tr_gen, val_gen, num_train=800000,
-    #          num_val=100000, batch_size=16, loss="mae")
-
-    # Evaluate part.(Only one sample here)
-    imgs, _ = srcnn.evaluate(
-        "./test_image/butterfly_GT.bmp", mode="auto", scale=4, lr_shape=1)
-
-    # Save the result.
-    misc.imsave("./example/butt_sr_2X.jpg", imgs[1].squeeze())
-    misc.imsave("./example/butt_hr.jpg", imgs[0].squeeze())
-    misc.imsave("./example/butt_lr_2X.jpg", misc.imresize(imgs[0].squeeze(), 1/3))
-
-    # # Evaluate images from a directory and calculate the average psnr.
-    psnr, PSNR_List = srcnn.evaluate_batch(
-        "./test_image/set5", mode="auto", scale=3, lr_shape=1, stride_scale=0.5, return_list=True)
-    print("Average psnr of this Directory is ", psnr)
-    # Average psnr of this Directory(100 images from DIV2K Validation dataset) is  27.549315894072866
-
-    # Plot the sample and psnr.
-    plt.subplot(131)
-    plt.imshow(np.uint8(imgs[0].squeeze()))
-    plt.subplot(132)
-    plt.imshow(np.uint8(imgs[1].squeeze()))
-    plt.subplot(133)
-    plt.plot(np.arange(len(PSNR_List)), PSNR_List)
-    plt.show()
-
-
-if __name__ == '__main__':
-    main()
