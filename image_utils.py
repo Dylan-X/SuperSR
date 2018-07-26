@@ -30,6 +30,21 @@ You can also add your_func to generate the data you want, and use function in Fl
 # DOWNSAMPLE, BLOCK-EXTRACTION, BLOCK-MERGING
 ############################################
 
+def plot_gallery(title, images, n_col=3, n_row=4, image_shape=(48,48)):
+    plt.figure(figsize=(2. * n_col, 2.26 * n_row))
+    plt.suptitle(title, size=16)
+    for i, comp in enumerate(images):
+        plt.subplot(n_row, n_col, i + 1)
+        vmax = max(comp.max(), -comp.min())
+        plt.imshow(comp.reshape(image_shape), cmap='gray',
+                   interpolation='nearest',
+                   vmin=-vmax, vmax=vmax)
+        plt.xticks(())
+        plt.yticks(())
+    plt.subplots_adjust(0.01, 0.05, 0.99, 0.93, 0.04, 0.)
+    plt.savefig("./%s.jpg" % title)
+    plt.show()
+
 def center_crop(img, padding):
     img = np.array(img)
     if len(img.shape)==3:
