@@ -19,7 +19,6 @@ A completion of data-preprocessing and models of SR(super-resolution based on CN
 - Enhance the models' fitting mode, supports multi-inputs and multi-outputs situation. Also supports the multi-stage when fitting with different learning_rate and epochs.
 - Enhance the `utils.psnr` and `utils.PSNR` function, no need to concern the peak-value of image at all to calculate psnr value. (But still only supports 8-bit image.)
 
-
 ## Image_utils
 
 - Image downsampling, supports batch operation.
