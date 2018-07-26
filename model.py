@@ -9,9 +9,9 @@ import keras.optimizers as optimizers
 from keras import backend as K
 from .advanced import TensorBoardBatch
 # from image_utils import Dataset, downsample, merge_to_whole
-from .utils import PSNR, psnr, SubpixelConv2D
-from .image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, rgb2ycbcr
-from .Flow import image_flow_h5
+from utils import PSNR, psnr, SubpixelConv2D, PSNR_Y
+from image_utils import merge_to_whole, hr2lr, hr2lr_batch, slice_normal, rgb2ycbcr
+from Flow import image_flow_h5
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from PIL import Image
@@ -106,7 +106,6 @@ class BaseSRModel(object):
         if self.model == None:
             self.create_model()
 
-
         callback_list = []
         # callback_list.append(HistoryCheckpoint(history_fn))
         callback_list.append(callbacks.ModelCheckpoint(self.weight_path, monitor=monitor,
@@ -117,7 +116,7 @@ class BaseSRModel(object):
                                                   write_grads=visual_grads, write_graph=visual_graph, write_images=visual_weight_image))  # FIXME why these parameters doen't work?
 
         print('Training model : %s' % (self.model_name))
-
+        
         # num_stage = max([len(x) for x in [learning_rate, nb_epochs] if isinstance(x, (list, tuple))])
         num_stage = 1
         for x in [learning_rate, nb_epochs]:
@@ -130,12 +129,13 @@ class BaseSRModel(object):
             ep = nb_epochs if isinstance(nb_epochs, int) else nb_epochs[s]
             # adam = optimizers.Nadam()
             adam = optimizers.Adam(lr=lr, beta_1=0.9, beta_2=0.999, epsilon=1e-8)
-            self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR], loss_weights=loss_weights)
+            self.model.compile(optimizer=adam, loss=loss, metrics=[PSNR_Y], loss_weights=loss_weights)
 
             self.model.fit_generator(tr_gen,
                                     steps_per_epoch=num_train // batch_size + 1, epochs=ep, callbacks=callback_list,
                                     validation_data=val_gen,
                                     validation_steps=num_val // batch_size + 1)
+
         return self.model
 
 
@@ -450,6 +450,5 @@ class EDSR(BaseSRModel):
         m = Add(name="res_merge_" + str(id))([x, init])
 
         return m
-
 
 

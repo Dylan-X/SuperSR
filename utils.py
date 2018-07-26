@@ -21,6 +21,7 @@ def PSNR(y_true, y_pred):
     When providing an unscaled input, MAXp = 255. Therefore 20 * log10(255)== 48.1308036087.
     However, since we are scaling our input, MAXp = 1. Therefore 20 * log10(1) = 0.
     Thus we remove that component completely and only compute the remaining MSE component.
+
     """
     # if K.max(y_true) > 1.:
     #     return 48.1308036087-10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.)
@@ -32,6 +33,21 @@ def PSNR(y_true, y_pred):
     max_is_255 = max_val > 1
     return K.switch(max_is_255, 48.1308036087-10. *
              K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.), -10. * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.))
+
+def PSNR_Y(y_true, y_pred):
+
+    r,g,b = [y_true[:,:,:,i] for i in range(3)]
+    y_true_Y = 0.257*r + 0.504*g + 0.098*b + 16/255.
+
+
+
+    r, g, b = [y_pred[:, :,:, i] for i in range(3)]
+    y_pred_Y = 0.257*r + 0.504*g + 0.098*b + 16/255.
+
+
+    return K.switch(K.max(y_true_Y) > 1, 48.1308036087-10. *
+                    K.log(K.mean(K.square(y_pred_Y - y_true_Y))) / K.log(10.), -10. * K.log(K.mean(K.square(y_pred_Y - y_true_Y))) / K.log(10.))
+
 
 
 def psnr(y_true, y_pred):
