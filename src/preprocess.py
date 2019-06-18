@@ -2,10 +2,10 @@ import tensorflow as tf
 import numpy as np
 import random
 import os
-
+from .data_utils import modcrop
 
 TF_INTERP = {
-    0: tf..ResizeMethod.BILINEAR,
+    0: tf.image.ResizeMethod.BILINEAR,
     1: tf.image.ResizeMethod.NEAREST_NEIGHBOR,
     2: tf.image.ResizeMethod.BICUBIC
 }
@@ -55,11 +55,10 @@ def downsample_gaussian(Hr, scale, kernel_size, kernel_sigma):
     Hr_p = tf.pad(Hr, [[BKS // 2, BKS // 2]] * 2 + [[0, 0]], "SYMMETRIC")
 
     downsampled_Lr = tf.squeeze(
-        tf.nn.depthwise_conv2d(
-            Hr_p[tf.newaxis, ...],
-            kernel,
-            strides=[1, scale, scale, 1],
-            padding='VALID'))
+        tf.nn.depthwise_conv2d(Hr_p[tf.newaxis, ...],
+                               kernel,
+                               strides=[1, scale, scale, 1],
+                               padding='VALID'))
     Lr = tf.clip_by_value(downsampled_Lr, 0., 255.)
 
     return Lr / 255., Hr / 255.
@@ -85,17 +84,21 @@ def downsample_interp(Hr, scale, interp=2):
     Hr = modcrop(tf.cast(Hr, tf.float32), scale)
     H, W = Hr.shape[:2]
 
-    downsampled_Lr = tf.image.resize(
-        Hr, [H // scale, W // scale],
-        method=TF_INTERP[interp],
-        antialias=False)
+    downsampled_Lr = tf.image.resize(Hr, [H // scale, W // scale],
+                                     method=TF_INTERP[interp],
+                                     antialias=False)
 
     Lr = tf.clip_by_value(downsampled_Lr, 0., 255.)
 
     return Lr / 255., Hr / 255.
 
 
-def degrade_image(Hr, scale, method=-1, restore_shape=False, noise_level=None, **kwargs):
+def degrade_image(Hr,
+                  scale,
+                  method=-1,
+                  restore_shape=False,
+                  noise_level=None,
+                  **kwargs):
     '''Degrade Hr image with specific method, such as downsampling and adding additive noise.
 
         Params:
@@ -123,24 +126,28 @@ def degrade_image(Hr, scale, method=-1, restore_shape=False, noise_level=None, *
     '''
 
     if method == -1:
-        assert 'kernel_size' in kwargs.keys() and 'kernel_sigma' in kwargs.keys(
+        assert 'kernel_size' in kwargs.keys(
+        ) and 'kernel_sigma' in kwargs.keys(
         ), "With Gaussian method, size and sigma of kernel should be given."
 
-        lr, hr = downsample_gaussian(
-            Hr, scale, kwargs['kernel_size'], kwargs['kernel_sigma'])
+        lr, hr = downsample_gaussian(Hr, scale, kwargs['kernel_size'],
+                                     kwargs['kernel_sigma'])
 
     else:
         assert method in [
-            0, 1, 2], "Only -1: gaussian, 0: bilinear, 1: nearest-neighbor, 2: bicubic are supported"
+            0, 1, 2
+        ], "Only -1: gaussian, 0: bilinear, 1: nearest-neighbor, 2: bicubic are supported"
+
         lr, hr = downsample_interp(Hr, scale, method)
 
     if noise_level is not None:
-        noise = tf.random.normal(
-            lr.shape, stddev=1.0, dtype=tf.float32) * noise_level / 255.
+        noise = tf.random.normal(lr.shape, stddev=1.0,
+                                 dtype=tf.float32) * noise_level / 255.
         lr = tf.clip_by_value(lr + noise, 0., 1.)
 
     if restore_shape:
-        lr = tf.image.resize(lr*255., hr.shape[:2], method=TF_INTERP[2]) / 255.
+        lr = tf.image.resize(lr * 255., hr.shape[:2],
+                             method=TF_INTERP[2]) / 255.
         lr = tf.clip_by_value(lr, 0., 1.)
 
     return lr, hr

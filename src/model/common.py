@@ -17,6 +17,7 @@ class BaseSRModel(object):
         Attributes:
             model_name: Name of this model.
             weights_path: Path to save this model, using "./weights/model_name.h5" by default.
+            log_dir: Directory to save tensorboard log files.
             scale: Super-resolution ratio factor.
             inp_shape: Shape of input data in tuple, e.g. (None, None, 3).
             channel: Number of channels of both inputs and outputs.
@@ -43,6 +44,7 @@ class BaseSRModel(object):
         self.model_name = "%s_X%d" % (model_name, scale)
         os.makedirs("./weights", exist_ok=True)
         self.weights_path = "./weights/%s_X%d.h5" % (model_name, scale)
+        self.log_dir = "logs"
         self.model = None
 
     def create_model(self,
@@ -71,7 +73,7 @@ class BaseSRModel(object):
         self.model.compile(optimizer=opt,
                            loss='mse', metrics=[psnr_tf])
 
-        log_dir = os.path.join("./logs", self.model_name)
+        log_dir = os.path.join(self.log_dir, self.model_name)
         callback_list = [
             callbacks.ModelCheckpoint(
                 self.weights_path,
@@ -88,7 +90,7 @@ class BaseSRModel(object):
 
         self.model.fit(
             x=trdst.batch(batch_size),
-            epochs=nb_epochs
+            epochs=nb_epochs,
             callbacks=callback_list,
             validation_data=valdst.batch(batch_size),
             steps_per_epoch=steps_per_epoch,
