@@ -31,7 +31,7 @@ def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
                 The directory to Hr images.
             patch_per_image: Int.
                 Number of patches per image to save. patches are cropped randomly.
-            patch_size: Tuple of integers.
+            patch_size: Int or Tuple of integers.
                 Size of patch, e.g. (48, 48).
             tfrec_path: String.
                 Path to tfrecord file.
@@ -39,7 +39,8 @@ def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
 
     print('WRITING TO TFRECORD'.center(100, '='))
 
-    H, W = patch_size
+    H, W = patch_size if isinstance(patch_size, tuple) else (patch_size, ) * 2
+
     paths = list(glob.glob(os.path.join(hr_dir, "*")))
 
     def _serialize_generator_():
@@ -48,25 +49,25 @@ def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
         '''
         for p in tqdm(paths):
             img = tf.image.decode_image(tf.io.read_file(p))
-            for _ in range(patch_per_imag):
+            for _ in range(patch_per_image):
                 patch = tf.image.random_crop(img, (H, W, 3))
                 data_str = tf.io.serialize_tensor(patch)
                 # Create a dictionary mapping the feature name to the tf.Example-compatible
                 # data type.
                 feature = {feature_name: _bytes_feature(data_str)}
                 # Create a Features message using tf.train.Example.
-                example_proto = tf.train.Example(
-                    features=tf.train.Features(feature=feature))
+                example_proto = tf.train.Example(features=tf.train.Features(
+                    feature=feature))
                 yield example_proto.SerializeToString()
 
-    serialize_dst = tf.data.Dataset.from_generator(
-        segen, output_types=tf.string)
+    serialize_dst = tf.data.Dataset.from_generator(_serialize_generator_,
+                                                   output_types=tf.string)
 
     writer = tf.data.experimental.TFRecordWriter(tfrec_path)
     writer.write(serialize_dst)
 
 
-def load_tfrecord(tfrec_file):
+def load_tfrecord(patch_size, tfrec_file):
     '''Load patches from tfrecord wroten by `write_dst_tfrec`
 
         Params:
@@ -76,15 +77,20 @@ def load_tfrecord(tfrec_file):
         Return: 
             TF-Dataset contains Hr-patches.
     '''
+
     def _parse_function(example_proto):
         feature_description = {
-            feature_name: tf.io.FixedLenFeature(
-                [], tf.string, default_value='')
+            feature_name: tf.io.FixedLenFeature([],
+                                                tf.string,
+                                                default_value='')
         }
         # Parse the input tf.Example proto using the dictionary above.
         features = tf.io.parse_single_example(example_proto,
                                               feature_description)
-        return tf.io.parse_tensor(features[feature_name], out_type=tf.uint8)
+        img = tf.io.parse_tensor(features[feature_name], out_type=tf.uint8)
+        H, W = patch_size if isinstance(patch_size,
+                                        tuple) else (patch_size, ) * 2
+        return tf.reshape(img, [H, W, 3])
 
     raw_dataset = tf.data.TFRecordDataset(tfrec_file).shuffle(100)
     parsed_dataset = raw_dataset.map(_parse_function, AUTOTUNE)
