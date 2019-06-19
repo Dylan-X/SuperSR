@@ -47,7 +47,7 @@ def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
         '''
         Python generator, yield patch randomly cropped from Hr-image.
         '''
-        for p in tqdm(paths):
+        for _, p in tqdm(enumerate(paths)):
             img = tf.image.decode_image(tf.io.read_file(p))
             for _ in range(patch_per_image):
                 patch = tf.image.random_crop(img, (H, W, 3))

@@ -29,7 +29,7 @@ class SRCNN_915(BaseSRModel):
         inp = super(SRCNN, self).create_model()
 
         x = layers.Convolution2D(self.n1, (self.f1, self.f1),
-                                 activation='relu', padding='same', name='level1')(init)
+                                 activation='relu', padding='same', name='level1')(inp)
         x = layers.Convolution2D(self.n2, (self.f2, self.f2),
                                  activation='relu', padding='same', name='level2')(x)
 
