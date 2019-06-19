@@ -6,6 +6,8 @@ An implementation of data-pipeline and models of SR (super-resolution based on C
 
 Amazing, it has been year 9012 yet I'm still here super-resolving 2D images... **Remember to update tensorflow2.0!**
 
+Details about the usage of ***SuperSR***, check the notebooks: [train_model](/train_models.ipynb "notebook") and [train_customized_model](/train_customized_model.ipynb "notebook")
+
 ### Brand new Codes
 
 - Faster
@@ -13,6 +15,7 @@ Amazing, it has been year 9012 yet I'm still here super-resolving 2D images... *
 - More Concise
 - Easy to read and use
 (As far as I'm thinking...)
+- Tutorial prepared
 
 ### Main Structure
 
@@ -22,7 +25,7 @@ Amazing, it has been year 9012 yet I'm still here super-resolving 2D images... *
 
   - With `BaseSRModel`, everything about training or evaluation(to be implemented) a super-resolution model could be finished in one time. All you need to do is to customize the model structure part in the method named `create_model`.
   
-  - For model training, I add weight-normalization for Adam optimizer, one can set `use_wn` to use it (see, I'm really selfless). It's noted that the `lr_schedule` method is the most common schedule solution of learning rate in my training. One can modify it anyway, such as `SRCNN` model (original paper has defined a learning rate schedule), it's flexible~
+  - For model training, I add weight-normalization for Adam optimizer, one can set `use_wn` to use it. It's noted that the `lr_schedule` method is the most common schedule solution of learning rate in my training. One can modify it anyway, such as `SRCNN` model (original paper has defined a learning rate schedule), it's flexible~
 
   - Pre-defined models, such as `EDSR`, `SRCNN`, are ready to be trained directly. (Basically follow the original paper.)
 
@@ -38,7 +41,7 @@ Amazing, it has been year 9012 yet I'm still here super-resolving 2D images... *
 
 - [ ] More pre-defined model such as WDSR, VDSR and so on...
 - [ ] Evaluation part of trained model. It's a big work...
-- [ ] Add notebooks for instruction of training with `**SuperSR**` !
+- [x] Add notebooks for instruction of training with `**SuperSR**` !
 - [ ] Train some model weights and share to everyone~
 
 ----
