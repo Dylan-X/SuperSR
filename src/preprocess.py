@@ -1,7 +1,5 @@
 import tensorflow as tf
 import numpy as np
-import random
-import os
 from .data_utils import modcrop
 
 TF_INTERP = {
@@ -21,7 +19,7 @@ def gaussian_kernel(sigma=2.):
         return: 
             (normalized) Gaussian kernel，in shape of (size, size)
     '''
-    size = int(sigma*6)+1
+    size = int(sigma * 6) + 1
     size = size + 1 if size % 2 == 0 else size
 
     x_points = np.arange(-(size - 1) // 2, (size - 1) // 2 + 1, 1)
@@ -53,8 +51,8 @@ def downsample_gaussian(Hr, scale, kernel_sigma):
     kernel = tf.concat([kernel[:, :, tf.newaxis, tf.newaxis]] * 3, axis=-2)
 
     Hr = modcrop(tf.cast(Hr, tf.float32), scale)
-    Hr_p = tf.pad(Hr, [[kernel_size // 2, kernel_size // 2]]
-                  * 2 + [[0, 0]], "SYMMETRIC")
+    Hr_p = tf.pad(Hr, [[kernel_size // 2, kernel_size // 2]] * 2 + [[0, 0]],
+                  "SYMMETRIC")
 
     downsampled_Lr = tf.squeeze(
         tf.nn.depthwise_conv2d(Hr_p[tf.newaxis, ...],
