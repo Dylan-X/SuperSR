@@ -8,7 +8,6 @@ import random
 import glob
 import os
 
-AUTOTUNE = tf.data.experimental.AUTOTUNE
 feature_name = "data"
 
 
@@ -20,15 +19,15 @@ def _bytes_feature(value):
     return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
 
 
-def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
-    ''' Write patch of hr image into tfrecord file.
+def write_dst_tfrec(paths, patch_per_image, patch_size, tfrec_path):
+    ''' Write patches of hr image into tfrecord file.
 
         We save all patches with dtype in Uint8, which cropped from Hr-image in RGB color space.
 
         Params:
 
-            hr_dir: String.
-                The directory to Hr images.
+            paths: List of string.
+                Image paths to be loaded and cropped.
             patch_per_image: Int.
                 Number of patches per image to save. patches are cropped randomly.
             patch_size: Int or Tuple of integers.
@@ -40,8 +39,6 @@ def write_dst_tfrec(hr_dir, patch_per_image, patch_size, tfrec_path):
     print('WRITING TO TFRECORD'.center(100, '='))
 
     H, W = patch_size if isinstance(patch_size, tuple) else (patch_size, ) * 2
-
-    paths = list(glob.glob(os.path.join(hr_dir, "*")))
 
     def _serialize_generator_():
         '''
@@ -71,6 +68,8 @@ def load_tfrecord(patch_size, tfrec_file):
     '''Load patches from tfrecord wroten by `write_dst_tfrec`
 
         Params:
+            patch_size: Int or Tuple of integers.
+                Size of saved patches.
             tfrec_file: String.
                 Path to tfrecord file.
 
@@ -92,6 +91,6 @@ def load_tfrecord(patch_size, tfrec_file):
                                         tuple) else (patch_size, ) * 2
         return tf.reshape(img, [H, W, 3])
 
-    raw_dataset = tf.data.TFRecordDataset(tfrec_file).shuffle(100)
-    parsed_dataset = raw_dataset.map(_parse_function, AUTOTUNE)
+    raw_dataset = tf.data.TFRecordDataset(tfrec_file)
+    parsed_dataset = raw_dataset.map(_parse_function)
     return parsed_dataset
