@@ -11,48 +11,50 @@ TF_INTERP = {
 }
 
 
-def gaussian_kernel(size=5, sigma=2.):
-    ''' Get a gaussian kernel.
+def gaussian_kernel(sigma=2.):
+    ''' Get a gaussian kernel. Size of kernel (odd) is greater than six times the sigma.
 
         Param:
-            size: int 
-                odd value
             sigma: float 
                 blur factor
 
         return: 
             (normalized) Gaussian kernel，in shape of (size, size)
     '''
+    size = int(sigma*6)+1
+    size = size + 1 if size % 2 == 0 else size
+
     x_points = np.arange(-(size - 1) // 2, (size - 1) // 2 + 1, 1)
     y_points = x_points[::-1]
     xs, ys = np.meshgrid(x_points, y_points)
-    kernel = np.exp(-(xs**2 + ys**2) / (2 * sigma**2)) / (2 * np.pi * sigma**2)
-    kernel = kernel / kernel.sum()
-    return kernel.astype("float32")
+
+    kernel = tf.exp(-(xs**2 + ys**2) / (2 * sigma**2)) / (2 * np.pi * sigma**2)
+    kernel = kernel / tf.reduce_sum(kernel)
+
+    return tf.cast(kernel, tf.float32)
 
 
-def downsample_gaussian(Hr, scale, kernel_size, kernel_sigma):
+def downsample_gaussian(Hr, scale, kernel_sigma):
     '''Downsample Hr image with gaussian kernel.
 
         Params:
-            Hr: Tensor or Numpy array.
+            Hr: Tensor or Numpy array. Value in (0, 255)
                 Hr image to be downsampled.
             scale: Int.
                 Scale factor of downsampling ratio.
-            kernel_size: Int.
-                Size of Gaussian kernel.
             kernel_sigma: Float.
                 Blur factor of Gaussian kernel.
 
         Return:
             Downsampled lr and Modcropped hr, normalized into 0--1 in float32. 
     '''
-    kernel = tf.convert_to_tensor(gaussian_kernel(kernel_size, kernel_sigma))
+    kernel = gaussian_kernel(kernel_sigma)
+    kernel_size = kernel.shape[0]
     kernel = tf.concat([kernel[:, :, tf.newaxis, tf.newaxis]] * 3, axis=-2)
-    kernel = tf.cast(kernel, tf.float32)
 
     Hr = modcrop(tf.cast(Hr, tf.float32), scale)
-    Hr_p = tf.pad(Hr, [[BKS // 2, BKS // 2]] * 2 + [[0, 0]], "SYMMETRIC")
+    Hr_p = tf.pad(Hr, [[kernel_size // 2, kernel_size // 2]]
+                  * 2 + [[0, 0]], "SYMMETRIC")
 
     downsampled_Lr = tf.squeeze(
         tf.nn.depthwise_conv2d(Hr_p[tf.newaxis, ...],
@@ -70,7 +72,7 @@ def downsample_interp(Hr, scale, interp=2):
         XXX To be noted, we set `antialias` False by defaults. One can adjust it if needed.
 
         Params:
-            Hr: Tensor or Numpy array.
+            Hr: Tensor or Numpy array. Value in range (0, 255)
                 Hr image to be downsampled.
             scale: Int.
                 Scale factor of downsampling ratio.
@@ -102,14 +104,14 @@ def degrade_image(Hr,
     '''Degrade Hr image with specific method, such as downsampling and adding additive noise.
 
         Params:
-            Hr: Tensor or Numpy array.
+            Hr: Tensor or Numpy array. Value in range (0, 255)
                 Hr-image to be downsampled.
             scale: Int.
                 Scale factor of downsampling ratio.
             method: Int. 
                 Downsampling method. One of -1: gaussian, 0: bilinear, 1: nearest-neighbor, 2: bicubic.
                 See `downsample_interp` and `downsample_gaussian` for details.
-                XXX If not using gaussian, we set `antialias` False by defaults. One can adjust it if needed.
+                XXX If not using interpolation methods, we set `antialias` False by defaults. One can adjust it if needed.
             restore_shape: Bool.
                 Whether to restore the shape of lr-image as shape of hr-image. (i.e., SRCNN data preprocessing)
                 XXX To be noted, we use `bicubic` method to upsample image by default.
@@ -118,7 +120,7 @@ def degrade_image(Hr,
                 (After downsampling, before upsampling)
                 XXX To be noted, noise_level denotes the standard deviation of noise wrt. RGB image in (0, 255).
             **kwargs: Dict.
-                If `method` is -1, `kernel_size` and `kernel_sigma` should be given. 
+                If `method` is -1, `kernel_sigma` should be given. 
                 See `downsample_gaussian` for details.
 
         Return:
@@ -126,12 +128,10 @@ def degrade_image(Hr,
     '''
 
     if method == -1:
-        assert 'kernel_size' in kwargs.keys(
-        ) and 'kernel_sigma' in kwargs.keys(
-        ), "With Gaussian method, size and sigma of kernel should be given."
+        assert 'kernel_sigma' in kwargs.keys(
+        ), "With Gaussian method, sigma of kernel should be given."
 
-        lr, hr = downsample_gaussian(Hr, scale, kwargs['kernel_size'],
-                                     kwargs['kernel_sigma'])
+        lr, hr = downsample_gaussian(Hr, scale, kwargs['kernel_sigma'])
 
     else:
         assert method in [
