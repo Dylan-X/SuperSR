@@ -1,4 +1,4 @@
-from tensorflow.python.data import Dataset
+from tensorflow.data import Dataset
 import tensorflow as tf
 from tqdm import tqdm
 from PIL import Image
