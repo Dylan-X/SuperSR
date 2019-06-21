@@ -31,3 +31,19 @@ def center_crop(img, target_size):
     end = tuple(map(operator.add, start, target_size))
     slices = tuple(map(slice, start, end))
     return img[slices]
+
+
+def rgb2ycbcr(image):
+    '''Convert RGB image to YCbCr color space.
+
+        Only available on normalized image (value range in 0 to 255)
+    '''
+    assert image.max() <= 1.0, "Max value of image should be 1.0"
+
+    R, G, B = [image[..., i][..., np.newaxis] for i in range(3)]
+    Y = 0.257 * R + 0.504 * G + 0.098 * B + 16 / 255.
+    Cb = -0.148 * R - 0.291 * G + 0.439 * B + 128 / 255.
+    Cr = 0.439 * R - 0.368 * G - 0.071 * B + 128 / 255.
+    final_img = np.concatenate((Y, Cb, Cr), axis=-1)
+
+    return final_img.astype("float32")
