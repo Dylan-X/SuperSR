@@ -27,7 +27,7 @@ Details about the usage of ***SuperSR***, check the notebooks: [train_model](/tr
   
   - Here uses Adam as default optimizer, you can change it in `BaseSRModel`.
 
-  - I add weight-normalization for Adam optimizer, one can set `use_wn` True to use it. 
+  - I add weight-normalization for Adam optimizer, one can set `use_wn` True to use it.
 
   - It's noted that the `lr_schedule` method is the most common schedule solution of learning rate in my training. One can modify it anyway, such as `SRCNN` model (original paper has defined a learning rate schedule), it's flexible~
 
