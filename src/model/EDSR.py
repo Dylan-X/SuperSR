@@ -56,7 +56,7 @@ class EDSR(BaseSRModel):
 
         if load_weights:
             weights_path = self.weights_path if weights_path is None else weights_path
-            model.load_weights(self.weight_path)
+            model.load_weights(weights_path)
             print("loaded model %s from %s" % (self.model_name, weights_path))
 
         self.model = model

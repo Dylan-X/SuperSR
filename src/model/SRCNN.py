@@ -26,7 +26,7 @@ class SRCNN_915(BaseSRModel):
         You can change it to `valid` if needed, don't forget to modify the labels' size.
         '''
 
-        inp = super(SRCNN, self).create_model()
+        inp = super(SRCNN_915, self).create_model()
 
         x = layers.Convolution2D(self.n1, (self.f1, self.f1),
                                  activation='relu', padding='same', name='level1')(inp)
@@ -40,7 +40,7 @@ class SRCNN_915(BaseSRModel):
 
         if load_weights:
             weights_path = self.weights_path if weights_path is None else weights_path
-            model.load_weights(self.weight_path)
+            model.load_weights(weights_path)
             print("loaded model %s from %s" % (self.model_name, weights_path))
 
         self.model = model
