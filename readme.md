@@ -1,4 +1,4 @@
-# SuperSR
+# SuperSR 🎈
 
 An implementation of data-pipeline and models of SR (super-resolution based on CNN) research.
 
