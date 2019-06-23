@@ -10,7 +10,9 @@ TF_INTERP = {
 
 
 def gaussian_kernel(sigma=2.):
-    ''' Get a gaussian kernel. Size of kernel (odd) is greater than six times the sigma.
+    ''' Get a gaussian kernel. 
+        
+        Size of kernel (odd) is greater than six times the sigma.
 
         Param:
             sigma: float 

@@ -22,7 +22,7 @@ def _bytes_feature(value):
 def write_dst_tfrec(paths, patch_per_image, patch_size, tfrec_path):
     ''' Write patches of hr image into tfrecord file.
 
-        We save all patches with dtype in Uint8, which cropped from Hr-image in RGB color space.
+        We save all patches in dtype of Uint8, which cropped from Hr-image in RGB color space.
 
         Params:
 
