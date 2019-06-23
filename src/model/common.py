@@ -1,11 +1,12 @@
 from tensorflow.python.keras import layers, callbacks, optimizers
 from tensorflow.python.keras.utils import plot_model
-from tensorflow.python import keras
 import tensorflow as tf
 import os
 
 from ..wn import AdamWithWeightnorm
 from .utils import psnr_tf
+
+AUTOTUNE = tf.data.experimental.AUTOTUNE
 
 
 class BaseSRModel(object):
@@ -27,13 +28,12 @@ class BaseSRModel(object):
             create_model(): XXX Generate the model, you need to complete this func.
             lr_schedule(): Define the learning rate with respect to epoch.
             fit(): train the model with training dataset and hyperparameters.
-                - trdst: Tensorflow Dataset for training.
-                - valdst: Tensorflow Dataset for validation.
+                - trdst: Tensorflow Dataset for training. (XXX Don't batch it!)
+                - valdst: Tensorflow Dataset for validation. (XXX Don't batch             it!)
                 - nb_epochs: Int, number of epochs to train.
                 - steps_per_epoch: Int, number of back propagations per epoch.
                 - batch_size: Int, batch size.
-                - use_wn: Whether to use Adam with Weight-Normalization when training. 
-                          (Using Adam directly by default.)
+                - use_wn: Whether to use Adam with Weight-Normalization when              training. (Using Adam directly by default.)
             plot_model(): plot the model and save to ./
     """
 
@@ -47,10 +47,7 @@ class BaseSRModel(object):
         self.log_dir = "logs"
         self.model = None
 
-    def create_model(self,
-                     load_weights=False,
-                     weights_path=None,
-                     **kwargs):
+    def create_model(self, load_weights=False, weights_path=None, **kwargs):
         return layers.Input(self.inp_shape)
 
     def lr_schedule(self, epoch, max_epoch):
@@ -70,38 +67,37 @@ class BaseSRModel(object):
             use_wn=False):
 
         opt = AdamWithWeightnorm() if use_wn else optimizers.Adam()
-        self.model.compile(optimizer=opt,
-                           loss='mse', metrics=[psnr_tf])
+        self.model.compile(optimizer=opt, loss='mse', metrics=[psnr_tf])
 
         log_dir = os.path.join(self.log_dir, self.model_name)
         callback_list = [
-            callbacks.ModelCheckpoint(
-                self.weights_path,
-                save_best_only=False,
-                save_weights_only=True,
-                verbose=1),
-            callbacks.LearningRateScheduler(
-                lambda e: self.lr_schedule(e, nb_epochs), verbose=0),
-            callbacks.TensorBoard(
-                log_dir=log_dir, histogram_freq=1, write_graph=True)
+            callbacks.ModelCheckpoint(self.weights_path,
+                                      save_best_only=False,
+                                      save_weights_only=True,
+                                      verbose=1),
+            callbacks.LearningRateScheduler(lambda e: self.lr_schedule(
+                e, nb_epochs),
+                                            verbose=0),
+            callbacks.TensorBoard(log_dir=log_dir,
+                                  histogram_freq=1,
+                                  write_graph=True)
         ]
 
         print('Training model : %s' % (self.model_name))
 
         self.model.fit(
-            x=trdst.batch(batch_size),
+            x=trdst.batch(batch_size).prefetch(AUTOTUNE),
             epochs=nb_epochs,
             callbacks=callback_list,
-            validation_data=valdst.batch(batch_size),
+            validation_data=valdst.batch(batch_size).prefetch(AUTOTUNE),
             steps_per_epoch=steps_per_epoch,
             verbose=1)
 
         return self
 
     def plot_model(self, ):
-        plot_model(
-            self.model,
-            to_file="./%s.png" % self.model_name,
-            show_shapes=True,
-            show_layer_names=True,
-            rankdir="TB")
+        plot_model(self.model,
+                   to_file="./%s.png" % self.model_name,
+                   show_shapes=True,
+                   show_layer_names=True,
+                   rankdir="TB")
